@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: flowsig
+Version: 0.1.0
+Summary: Use graphical modeling to infer communication-driven intercellular flows from single-cell RNA-sequencing and spatial transcriptomics data.
+Home-page: https://github.com/axelalmet/flowsig
+Author: Axel A. Almet
+Author-email: axelalmet@gmail.com

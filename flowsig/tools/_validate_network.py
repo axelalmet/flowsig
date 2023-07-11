@@ -1,11 +1,11 @@
 from typing import Optional, Dict
-import anndata
+import scanpy as sc
 import networkx as nx
 import numpy as np
 import pandas as pd
 import graphical_models as gpm
 
-def filter_low_confidence_edges(adata: anndata.AnnData,
+def filter_low_confidence_edges(adata: sc.AnnData,
                                 edge_threshold: float,
                                 flowsig_network_key: str = 'flowsig_network',
                                 adjacency_key: str = 'adjacency',
@@ -94,10 +94,10 @@ def filter_low_confidence_edges(adata: anndata.AnnData,
     # Save the "validated" adjacency
     adata.uns[flowsig_network_key][filtered_adjacency_key] = adjacency_filtered
 
-def validate_against_biological_flow(adata: anndata.AnnData,
-                                    flowsig_network_key: str = 'flowsig_network',
-                                    adjacency_key: str = 'adjacency',
-                                    validated_adjacency_key: str = 'adjacency_validated'):
+def apply_biological_flow(adata: sc.AnnData,
+                        flowsig_network_key: str = 'flowsig_network',
+                        adjacency_key: str = 'adjacency',
+                        validated_adjacency_key: str = 'adjacency_validated'):
     """
     Validate the learned CPDAG from UT-IGSP by checking edges against the assumed
     biological flow model, inflow signal -> gene expression module -> outflow signal.

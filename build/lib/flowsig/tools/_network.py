@@ -12,6 +12,8 @@ from timeit import default_timer as timer
 from functools import reduce
 from joblib import Parallel, delayed
 import anndata as ad
+import warnings
+warnings.filterwarnings('ignore')
 
 # Define the sampling step functions where we input the initial list of permutations
 def run_gsp(adata: ad.AnnData,

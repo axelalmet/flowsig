@@ -1,3 +1,4 @@
+pyproject.toml
 setup.cfg
 setup.py
 flowsig/__init__.py
@@ -6,11 +7,22 @@ flowsig.egg-info/SOURCES.txt
 flowsig.egg-info/dependency_links.txt
 flowsig.egg-info/requires.txt
 flowsig.egg-info/top_level.txt
+flowsig/data/allTFs_human.txt
+flowsig/data/allTFs_mouse.txt
+flowsig/data/allTFs_zebrafish.txt
+flowsig/data/cellchat_interactions_and_tfs_human.csv
+flowsig/data/cellchat_interactions_and_tfs_mouse.csv
+flowsig/plotting/__init__.py
+flowsig/plotting/_plotting.py
 flowsig/preprocessing/__init__.py
 flowsig/preprocessing/_flow_expressions.py
 flowsig/preprocessing/_flow_preprocessing.py
 flowsig/preprocessing/_gem_construction.py
+flowsig/preprocessing/_spatial_blocking.py
 flowsig/preprocessing/_townes_nsf_utils.py
 flowsig/tools/__init__.py
 flowsig/tools/_network.py
+flowsig/tools/_spatial.py
 flowsig/tools/_validate_network.py
+flowsig/utilities/__init__.py
+flowsig/utilities/_utils.py

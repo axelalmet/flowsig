@@ -13,7 +13,7 @@ from functools import reduce
 from joblib import Parallel, delayed
 import anndata as ad
 import warnings
-warnings.filterwarnings('default')
+warnings.filterwarnings('ignore')
 
 # Define the sampling step functions where we input the initial list of permutations
 def run_gsp(adata: ad.AnnData,
@@ -319,10 +319,8 @@ def learn_intercellular_flows(adata: ad.AnnData,
 
         flow_vars = list(adata.uns[flowsig_key]['flow_vars'])
 
-
         # Randomly shuffle to edges to generate initial permutations for initial DAGs
         bagged_adjacency = np.zeros((len(flow_vars), len(flow_vars)))
-
         bagged_perturbed_targets = [np.zeros(len(flow_vars)) for key in perturbed_keys]
 
         start = timer()

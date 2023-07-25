@@ -26,6 +26,7 @@ def construct_gems_using_pyliger(adata: sc.AnnData,
     for cond in conditions:
         adata_cond =  adata[adata.obs[condition_key] == cond].copy()
         adata_cond.uns['sample_name'] = cond
+        adata_list.append(adata_cond)
 
     adata_liger = pyliger.create_liger(adata_list, make_sparse=True)
 
@@ -49,17 +50,17 @@ def construct_gems_using_pyliger(adata: sc.AnnData,
         pyliger_info[cond] = {'H': adata_liger.adata_list[i].obsm['H'],
                             'W': adata_liger.adata_list[i].varm['W'],
                             'V': adata_liger.adata_list[i].varm['V']}
-        
-    adata.uns['pyliger_info'] = pyliger_info        
-    adata.uns['pyliger_vars'] = adata_liger.adata_list[0].var_names.tolist()        
 
+    adata.uns['pyliger_info'] = pyliger_info
+    adata.uns['pyliger_info']['vars'] = adata_liger.adata_list[0].var_names.tolist()        
+    adata.uns['pyliger_info']['n_gems'] =  n_gems
     adata.obsm['X_gem'] = X_gem
 
 def construct_gems_using_nsf(adata: sc.AnnData,
                             n_gems: int,
                             layer_key: str,
                             spatial_key: str = "spatial",
-                            n_inducing_pts: Optional[int, str] = 500,
+                            n_inducing_pts: int = 500,
                             length_scale: float = 10.0):
 
 
@@ -87,8 +88,10 @@ def construct_gems_using_nsf(adata: sc.AnnData,
 
     insf = interpret_nsf(fit,Xtr,S=100,lda_mode=False)
 
-    ad.uns['nsf_info'] = insf
-    ad.obsm['X_gem'] = insf['factors']
+    adata.uns['nsf_info'] = insf
+    adata.uns['nsf_info']['vars'] = adata.var_names.tolist()
+    adata.uns['nsf_info']['n_gems'] =  n_gems
+    adata.obsm['X_gem'] = insf['factors']
 
 def construct_gems_using_nmf(adata: sc.AnnData,
                                 n_gems: int,
@@ -115,7 +118,10 @@ def construct_gems_using_nmf(adata: sc.AnnData,
     W_lda = W_lda[:, fact_orders]
     H_lda = H_lda[:, fact_orders].T
 
-    adata.uns['nmf_info'] = {'factors':W_lda, 'loadings':H_lda, 'totals':W_sum}
+    adata.uns['nmf_info'] = {'n_gems': n_gems,
+                             'vars': adata.var_names.tolist(),
+                             'factors':W_lda,
+                             'loadings':H_lda,
+                             'totals':W_sum}
 
     adata.obsm['X_gem'] = W_lda
-

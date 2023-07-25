@@ -1,2 +1,2 @@
-from ._network import learn_cellular_flows
-from ._validate_network import validate_against_biological_flow, filter_low_confidence_edges
+from ._network import learn_intercellular_flows
+from ._validate_network import apply_biological_flow, filter_low_confidence_edges

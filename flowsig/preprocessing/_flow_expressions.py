@@ -2,10 +2,12 @@ from typing import List, Tuple
 import numpy as np
 import scanpy as sc
 import pandas as pd
+import os
 
 def construct_gem_expressions(adata: sc.AnnData,
                             gem_expr_key: str = 'X_gem',
-                            scale_gem_expr: bool = True):
+                            scale_gem_expr: bool = True,
+                            layer_key: str = None):
     
     gem_expressions = adata.obsm[gem_expr_key]
 
@@ -23,7 +25,14 @@ def construct_gem_expressions(adata: sc.AnnData,
     adata_gem.var['interactions'] = '' # For housekeeping for later
 
     if scale_gem_expr:
-        scale_factor = np.exp(adata.X.toarray() - 1).mean(0)
+
+        if layer_key is not None:
+
+            scale_factor = adata.layers[layer_key].copy().sum(1).mean()
+
+        else:
+            scale_factor = np.exp(adata.X.toarray() - 1).sum(1).mean()
+
         adata_gem.X *= scale_factor
         sc.pp.log1p(adata_gem)
 
@@ -33,17 +42,18 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
                                     cellchat_output_key: str, 
                                     model_organism: str = 'human'):
     
-    model_organisms = ['human', 'mouse', 'zebrafish']
+    model_organisms = ['human', 'mouse']
 
     if model_organism not in model_organisms:
         raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
     
-    cellchat_interactions_and_tfs = pd.read_csv('../data/cellchat_interactions_and_tfs_' + model_organism + '.csv', index_col=0)
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+    data_path = os.path.join(data_dir, 'cellchat_interactions_and_tfs_' + model_organism + '.csv')
+
+    cellchat_interactions_and_tfs = pd.read_csv(data_path, index_col=0)
 
     ccc_output_merged = pd.concat([adata.uns[cellchat_output_key][sample] for sample in adata.uns[cellchat_output_key]])
     ccc_interactions = ccc_output_merged['interaction_name_2'].unique().tolist()
-
-    num_interactions = len(ccc_interactions)
 
     unique_inflow_vars_and_interactions = {}
 
@@ -150,10 +160,10 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
         inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
         
-
     adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
+    adata_inflow.var['type'] = 'inflow' # Define variable types
     adata_inflow.var['interactions'] = inflow_interactions
 
     return adata_inflow, inflow_vars
@@ -238,40 +248,35 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
 
     flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
 
-    flow_variable_types = {}
-    flow_downstream_tfs = {}
-    flow_interactions = {}
-
     for i, outflow_var in enumerate(outflow_vars):
-        flow_variable_types[outflow_var] = adata_outflow.var['type'].loc[outflow_var]
-        flow_downstream_tfs[outflow_var] = adata_outflow.var['downstream_tfs'].loc[outflow_var]
-        flow_interactions[outflow_var] = adata_outflow.var['interactions'].loc[outflow_var]
-
         flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
 
     for i, inflow_var in enumerate(inflow_vars):
-        flow_variable_types[outflow_var] = adata_inflow.var['type'].loc[inflow_var]
-        flow_downstream_tfs[outflow_var] = adata_inflow.var['downstream_tfs'].loc[inflow_var]
-        flow_interactions[outflow_var] = adata_inflow.var['interactions'].loc[inflow_var]
-    
         flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
 
     for i, gem in enumerate(flow_gem_vars):
-        flow_variable_types[outflow_var] = adata_gem.var['type'].loc[gem]
-        flow_downstream_tfs[outflow_var] = adata_gem.var['downstream_tfs'].loc[gem]
-        flow_interactions[outflow_var] = adata_gem.var['interactions'].loc[gem]
-    
         flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].flatten()
+
+    flow_variable_types = adata_outflow.var['type'].tolist() \
+                            + adata_inflow.var['type'].tolist() \
+                            + adata_gem.var['type'].tolist()
+    
+    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
+                            + adata_inflow.var['downstream_tfs'].tolist() \
+                            + adata_gem.var['downstream_tfs'].tolist()
+    
+    flow_interactions = adata_outflow.var['interactions'].tolist() \
+                            + adata_inflow.var['interactions'].tolist() \
+                            + adata_gem.var['interactions'].tolist()
 
     # Store the type, relevant downstream_TF, and received interactions for each variable
     # Store all the information on the flow variables
-    adata.uns[flowsig_network_key] = {'flow_vars': flow_variables,
-                                      'flow_var_types': flow_variable_types,
-                                      'downstream_tfs': flow_downstream_tfs,
-                                      'interactions': flow_interactions
-                                      }
-    # Flow expression types
-    adata.obsm[flowsig_expr_key] = flow_expressions
+    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
+                                 data = {'Types': flow_variable_types,
+                                      'Downstream_TFs': flow_downstream_tfs,
+                                      'Interactions': flow_interactions})
+    
+    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
 
 def construct_inflow_signals_commot(adata: sc.AnnData,
                                     commot_output_key: str):
@@ -279,7 +284,6 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
     inflow_vars = ['inflow-' + outflow_var for outflow_var in outflow_vars]
-
 
     inflow_interactions = []
     inflow_expressions = np.zeros((adata.n_obs, len(inflow_vars)))
@@ -294,6 +298,7 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
 
     adata_inflow = sc.AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
+    adata_inflow.var['type'] = 'inflow'
     adata_inflow.var['downstream_tfs'] = ''
     adata_inflow.var['interactions'] = inflow_interactions
 
@@ -319,6 +324,7 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
     adata_outflow = sc.AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = ''
+    adata_outflow.var['type'] = 'outflow' # Define variable types
     adata_outflow.var['interactions'] = outflow_interactions
 
     return adata_outflow, outflow_vars
@@ -327,6 +333,7 @@ def construct_flows_from_commot(adata: sc.AnnData,
                                 commot_output_key: str,
                                 gem_expr_key: str = 'X_gem',
                                 scale_gem_expr: bool = True,
+                                layer_key: str = None,
                                 flowsig_network_key: str = 'flowsig_network',
                                 flowsig_expr_key: str = 'X_flow'):
     
@@ -342,39 +349,33 @@ def construct_flows_from_commot(adata: sc.AnnData,
 
     flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
 
-    flow_variable_types = {}
-    flow_downstream_tfs = {}
-    flow_interactions = {}
-
     for i, outflow_var in enumerate(outflow_vars):
-        flow_variable_types[outflow_var] = adata_outflow.var['type'].loc[outflow_var]
-        flow_downstream_tfs[outflow_var] = adata_outflow.var['downstream_tfs'].loc[outflow_var]
-        flow_interactions[outflow_var] = adata_outflow.var['interactions'].loc[outflow_var]
-
         flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
 
     for i, inflow_var in enumerate(inflow_vars):
-        flow_variable_types[outflow_var] = adata_inflow.var['type'].loc[inflow_var]
-        flow_downstream_tfs[outflow_var] = adata_inflow.var['downstream_tfs'].loc[inflow_var]
-        flow_interactions[outflow_var] = adata_inflow.var['interactions'].loc[inflow_var]
-    
         flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
 
     for i, gem in enumerate(flow_gem_vars):
-        flow_variable_types[outflow_var] = adata_gem.var['type'].loc[gem]
-        flow_downstream_tfs[outflow_var] = adata_gem.var['downstream_tfs'].loc[gem]
-        flow_interactions[outflow_var] = adata_gem.var['interactions'].loc[gem]
-    
         flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].flatten()
+
+    flow_variable_types = adata_outflow.var['type'].tolist() \
+                            + adata_inflow.var['type'].tolist() \
+                            + adata_gem.var['type'].tolist()
+    
+    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
+                            + adata_inflow.var['downstream_tfs'].tolist() \
+                            + adata_gem.var['downstream_tfs'].tolist()
+    
+    flow_interactions = adata_outflow.var['interactions'].tolist() \
+                            + adata_inflow.var['interactions'].tolist() \
+                            + adata_gem.var['interactions'].tolist()
 
     # Store the type, relevant downstream_TF, and received interactions for each variable
     # Store all the information on the flow variables
-    adata.uns[flowsig_network_key] = {'flow_vars': flow_variables,
-                                      'flow_var_types': flow_variable_types,
-                                      'downstream_tfs': flow_downstream_tfs,
-                                      'interactions': flow_interactions
-                                      }
-    # Flow expression types
-    adata.obsm[flowsig_expr_key] = flow_expressions
+    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
+                                 data = {'Types': flow_variable_types,
+                                      'Downstream_TFs': flow_downstream_tfs,
+                                      'Interactions': flow_interactions})
+    
+    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
 
-# def construct_flow_expressions(adata: sc.AnnData):

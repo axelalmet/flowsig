@@ -7,5 +7,7 @@ setup(
     description='Use graphical modeling to infer communication-driven intercellular flows from single-cell RNA-sequencing and spatial transcriptomics data.',
     url='https://github.com/axelalmet/flowsig',
     author='Axel A. Almet',
-    author_email='axelalmet@gmail.com'
+    author_email='axelalmet@gmail.com',
+    include_package_data=True,
+    package_data={'': ['data/*.csv', 'data/*.txt']}
 )

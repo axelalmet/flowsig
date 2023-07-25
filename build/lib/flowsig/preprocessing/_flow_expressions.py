@@ -33,17 +33,15 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
                                     cellchat_output_key: str, 
                                     model_organism: str = 'human'):
     
-    model_organisms = ['human', 'mouse', 'zebrafish']
+    model_organisms = ['human', 'mouse']
 
     if model_organism not in model_organisms:
         raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
     
-    cellchat_interactions_and_tfs = pd.read_csv('../data/cellchat_interactions_and_tfs_' + model_organism + '.csv', index_col=0)
+    cellchat_interactions_and_tfs = pd.read_csv('cellchat_interactions_and_tfs_' + model_organism + '.csv', index_col=0)
 
     ccc_output_merged = pd.concat([adata.uns[cellchat_output_key][sample] for sample in adata.uns[cellchat_output_key]])
     ccc_interactions = ccc_output_merged['interaction_name_2'].unique().tolist()
-
-    num_interactions = len(ccc_interactions)
 
     unique_inflow_vars_and_interactions = {}
 
@@ -154,6 +152,7 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
     adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
+    adata_inflow.var['type'] = 'inflow' # Define variable types
     adata_inflow.var['interactions'] = inflow_interactions
 
     return adata_inflow, inflow_vars
@@ -294,6 +293,7 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
 
     adata_inflow = sc.AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
+    adata_inflow.var['type'] = 'inflow'
     adata_inflow.var['downstream_tfs'] = ''
     adata_inflow.var['interactions'] = inflow_interactions
 
@@ -319,6 +319,7 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
     adata_outflow = sc.AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = ''
+    adata_outflow.var['type'] = 'outflow' # Define variable types
     adata_outflow.var['interactions'] = outflow_interactions
 
     return adata_outflow, outflow_vars

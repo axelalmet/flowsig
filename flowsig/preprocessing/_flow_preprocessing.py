@@ -62,6 +62,7 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
     
     # Construct AnnData for flow expression
     perturbed_conditions = [cond for cond in adata.obs[condition_key].unique().tolist() if cond != control_key]
+    flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
 
     # Construct inflow and outflow adata objects
     adata_inflow = subset_for_flow_type(adata,
@@ -69,13 +70,14 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
                                         flowsig_expr_key = flowsig_expr_key,
                                         flowsig_network_key = flowsig_network_key)
 
+    
     adata_outflow = subset_for_flow_type(adata,
                                         var_type = 'outflow',
                                         flowsig_expr_key = flowsig_expr_key,
                                         flowsig_network_key = flowsig_network_key)
        
     # Calculate differentially inflowing vars
-    adata_inflow.uns['log1p'] = {'base':None} # Just in case
+    adata_inflow.uns['log1p'] = {'base': None} # Just in case
     sc.tl.rank_genes_groups(adata_inflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
 
     # Determine the differentially flowing vars
@@ -91,7 +93,7 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
 
         lowqval_des_inflow[cond] = lowqval_de['names'].tolist()
         
-    diff_inflow_vars = list(set.union(*map(set, [lowqval_des_inflow[cond] for cond in lowqval_des])))
+    diff_inflow_vars = list(set.union(*map(set, [lowqval_des_inflow[cond] for cond in lowqval_des_inflow])))
 
     # Calculate differentially inflowing vars
     adata_outflow.uns['log1p'] = {'base':None} # Just in case
@@ -113,7 +115,7 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
     diff_outflow_vars = list(set.union(*map(set, [lowqval_des_outflow[cond] for cond in lowqval_des_outflow])))
 
     # We don't change GEM vars because from experience, they typically incorporate condition-specific changes as is
-    gem_vars = 
+    gem_vars = flow_var_info[flow_var_info['Type'] == 'module'].index.tolist()
     vars_to_subset = diff_inflow_vars + diff_outflow_vars + gem_vars
 
     filter_flow_vars(adata,
@@ -127,17 +129,29 @@ def determine_spatially_flowing_vars(adata: sc.AnnData,
                                     moran_threshold: float = 0.1,
                                     coord_type: str = 'grid',
                                     n_neighbours: int = 6,
-                                    library_key: str = None):
+                                    library_key: str = None,
+                                    n_perms: int = None,
+                                    n_jobs: int = None):
 
+    # Get the flow info
+    flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
     
-    # Construct AnnData for flow expression
-    adata_flow = sc.AnnData(X=adata.obsm[flowsig_expr_key])
-    adata_flow.var_names = pd.Index(adata.uns[flowsig_network_key]['flow_vars'])
+    # Construct inflow and outflow adata objects
+    adata_inflow = subset_for_flow_type(adata,
+                                        var_type = 'inflow',
+                                        flowsig_expr_key = flowsig_expr_key,
+                                        flowsig_network_key = flowsig_network_key)
+
+    adata_outflow = subset_for_flow_type(adata,
+                                        var_type = 'outflow',
+                                        flowsig_expr_key = flowsig_expr_key,
+                                        flowsig_network_key = flowsig_network_key)
     
     if 'spatial' not in adata.obsm:
         ValueError("Need to specify spatial coordinates in adata.obsm['spatial'].")
     else:
-        adata_flow.obsm['spatial'] = adata.obsm['spatial']
+        adata_outflow.obsm['spatial'] = adata.obsm['spatial']
+        adata_inflow.obsm['spatial'] = adata.obsm['spatial']
 
         # Can't have spatial connectivities without spatial coordinates, lol
         if 'spatial_connectivities' not in adata.obsp['spatial_connectivities']:
@@ -147,10 +161,18 @@ def determine_spatially_flowing_vars(adata: sc.AnnData,
             if coord_type not in coord_types:
                 ValueError("Please specify coord_type to be one of %s" % coord_types)
 
-            sq.spatial_neighbors(adata_flow, coord_type=coord_type, n_neighs=n_neighbours, library_key=library_key)
+            sq.gr.spatial_neighbors(adata_outflow, coord_type=coord_type, n_neighs=n_neighbours, library_key=library_key)
+            sq.gr.spatial_neighbors(adata_inflow, coord_type=coord_type, n_neighs=n_neighbours, library_key=library_key)
+
+            sq.gr.spatial_autocorr(adata_outflow, genes=adata_outflow.var_names.tolist(), n_perms=n_perms, n_jobs=n_jobs)
+            sq.gr.spatial_autocorr(adata_inflow, genes=adata_inflow.var_names.tolist(), n_perms=n_perms, n_jobs=n_jobs)
 
             # Filter genes based on moran_threshold
-            spatially_flowing_vars = adata_flow.uns['moranI_ligand'][adata_flow.uns['moranI_ligand']['I'] > moran_threshold].index.tolist()
+            svg_outflows = adata_outflow.uns['moranI'][adata_outflow.uns['moranI']['I'] > moran_threshold].index.tolist()
+            svg_inflows = adata_inflow.uns['moranI'][adata_inflow.uns['moranI']['I'] > moran_threshold].index.tolist()
+            gem_vars = flow_var_info[flow_var_info['Type'] == 'module'].index.tolist()
+
+            spatially_flowing_vars = svg_outflows + svg_inflows + gem_vars
 
             # Re-adjust the flow variables
             filter_flow_vars(adata,

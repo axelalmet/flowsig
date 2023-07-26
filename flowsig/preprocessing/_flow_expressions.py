@@ -188,7 +188,7 @@ def construct_outflow_signals_cellchat(adata: sc.AnnData,
             # Sometimes this ligand not is not the actual symbol name (CellChat errors)
             if ligand not in adata.var_names:
                 # Get the alternative name for the ligand
-                ligand = cellchat_output_merged[cellchat_output_merged['interaction_name_2'] == inter]['ligand']
+                ligand = cellchat_output_merged[cellchat_output_merged['interaction_name_2'] == inter]['ligand'].values[0]
 
                 if (ligand in adata.var_names)&(ligand not in outflow_vars):
                     add_ligand = True
@@ -237,7 +237,7 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
 
 
     # Define the expression
-    adata_outflow, outflow_vars, = construct_outflow_signals_cellchat(adata, cellchat_output_key)
+    adata_outflow, outflow_vars = construct_outflow_signals_cellchat(adata, cellchat_output_key)
 
     adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism)
 
@@ -255,7 +255,7 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
         flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
 
     for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].flatten()
+        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
 
     flow_variable_types = adata_outflow.var['type'].tolist() \
                             + adata_inflow.var['type'].tolist() \
@@ -272,12 +272,13 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
     # Store the type, relevant downstream_TF, and received interactions for each variable
     # Store all the information on the flow variables
     flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Types': flow_variable_types,
-                                      'Downstream_TFs': flow_downstream_tfs,
-                                      'Interactions': flow_interactions})
+                                 data = {'Type': flow_variable_types,
+                                      'Downstream_TF': flow_downstream_tfs,
+                                      'Interaction': flow_interactions})
     
+    adata.obsm[flowsig_expr_key] = flow_expressions
     adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
-
+    
 def construct_inflow_signals_commot(adata: sc.AnnData,
                                     commot_output_key: str):
 
@@ -338,7 +339,7 @@ def construct_flows_from_commot(adata: sc.AnnData,
                                 flowsig_expr_key: str = 'X_flow'):
     
     # Define the expression
-    adata_outflow, outflow_vars, = construct_outflow_signals_commot(adata, commot_output_key)
+    adata_outflow, outflow_vars = construct_outflow_signals_commot(adata, commot_output_key)
 
     adata_inflow, inflow_vars = construct_inflow_signals_commot(adata, commot_output_key)
 
@@ -356,7 +357,7 @@ def construct_flows_from_commot(adata: sc.AnnData,
         flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
 
     for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].flatten()
+        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
 
     flow_variable_types = adata_outflow.var['type'].tolist() \
                             + adata_inflow.var['type'].tolist() \
@@ -373,9 +374,10 @@ def construct_flows_from_commot(adata: sc.AnnData,
     # Store the type, relevant downstream_TF, and received interactions for each variable
     # Store all the information on the flow variables
     flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Types': flow_variable_types,
-                                      'Downstream_TFs': flow_downstream_tfs,
-                                      'Interactions': flow_interactions})
+                                 data = {'Type': flow_variable_types,
+                                      'Downstream_TF': flow_downstream_tfs,
+                                      'Interaction': flow_interactions})
     
+    adata.obsm[flowsig_expr_key] = flow_expressions
     adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
 

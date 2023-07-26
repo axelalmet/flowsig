@@ -312,12 +312,13 @@ def learn_intercellular_flows(adata: ad.AnnData,
 
     # Initialise the results
     flowsig_network_results = {}
+
     if condition_key is not None: # If there is more than one condition, then we use UT-IGSP with a control vs perturbed condition
 
         conditions = adata.obs[condition_key].unique().tolist()        
         perturbed_keys = [cond for cond in conditions if cond != control_key]
 
-        flow_vars = list(adata.uns[flowsig_key]['flow_vars'])
+        flow_vars = list(adata.uns[flowsig_key]['flow_var_info'].index)
 
         # Randomly shuffle to edges to generate initial permutations for initial DAGs
         bagged_adjacency = np.zeros((len(flow_vars), len(flow_vars)))
@@ -326,6 +327,7 @@ def learn_intercellular_flows(adata: ad.AnnData,
         start = timer()
 
         print(f'starting computations on {n_jobs} cores')
+
 
         args = [(adata,
                 condition_key,
@@ -351,6 +353,8 @@ def learn_intercellular_flows(adata: ad.AnnData,
             adjacency = res['adjacency_cpdag']
             pert_indices = res['perturbed_targets_indices']
 
+            print(adjacency.shape)
+            
             # Update the bagged adjacency
             bagged_adjacency[np.ix_(nz_indices, nz_indices)] += adjacency
 
@@ -378,7 +382,7 @@ def learn_intercellular_flows(adata: ad.AnnData,
 
     else: # Else we have no perturbation and we will use GSP
 
-        flow_vars = list(adata.uns[flowsig_key]['flow_vars'])
+        flow_vars = list(adata.uns[flowsig_key]['flow_var_info'].index)
 
         # Randomly shuffle to edges to generate initial permutations for initial DAGs
         bagged_adjacency = np.zeros((len(flow_vars), len(flow_vars)))

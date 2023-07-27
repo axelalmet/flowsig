@@ -63,8 +63,9 @@ def construct_gems_using_nsf(adata: sc.AnnData,
                             n_inducing_pts: int = 500,
                             length_scale: float = 10.0):
 
-
-    X = adata.obsm[spatial_key]
+    ad = adata.copy()
+    
+    X = ad.obsm[spatial_key]
     # Take raw count data for NSF
     training_fraction = 1.0
     D,Dval = anndata_to_train_val(ad,
@@ -73,7 +74,7 @@ def construct_gems_using_nsf(adata: sc.AnnData,
                             flip_yaxis=True)
     Ntr,J = D["Y"].shape
     Xtr = D["X"]
-    ad = ad[:Ntr,:]
+    ad = adata[:Ntr,:]
     #convert to tensorflow objects
     Dtf = prepare_datasets_tf(D,Dval=Dval)
 

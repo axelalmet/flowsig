@@ -284,18 +284,21 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
 
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
-    inflow_vars = ['inflow-' + outflow_var for outflow_var in outflow_vars]
+    inflow_vars = ['inflow-' + outflow_var for outflow_var in outflow_vars if outflow_var in adata.var_names]
 
     inflow_interactions = []
     inflow_expressions = np.zeros((adata.n_obs, len(inflow_vars)))
-    for i, inflow_var in inflow_vars:
+
+    for i, inflow_var in enumerate(inflow_vars):
         lig = inflow_var.strip('inflow-')
-        inferred_interactions = [pair.strip('r-') for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
+
+        # Get rid of the 'r-' when defining the inferred interactions
+        inferred_interactions = [pair[2:] for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
         inflow_interactions.append('/'.join(sorted(inferred_interactions)))
 
         # We sum the total received signal across each interaction at each spot
         for inter in inferred_interactions:
-            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver'][inter]
+            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver']['r-' + inter]
 
     adata_inflow = sc.AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
@@ -311,12 +314,14 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
     
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
+    outflow_vars = [var for var in outflow_vars if var in adata.var_names]
 
     outflow_interactions = []
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
-    for i, outflow_var in outflow_interactions:
 
-        inferred_interactions = [pair.strip('r-') for pair in adata.obsm[commot_output_key + '-sum-sender'].columns if pair.startswith('s-' + outflow_var)]
+    for i, outflow_var in enumerate(outflow_vars):
+
+        inferred_interactions = [pair[2:] for pair in adata.obsm[commot_output_key + '-sum-sender'].columns if pair.startswith('s-' + outflow_var)]
         outflow_interactions.append('/'.join(sorted(inferred_interactions)))
 
         # Outflow signal expression is simply ligand gene expression
@@ -334,7 +339,6 @@ def construct_flows_from_commot(adata: sc.AnnData,
                                 commot_output_key: str,
                                 gem_expr_key: str = 'X_gem',
                                 scale_gem_expr: bool = True,
-                                layer_key: str = None,
                                 flowsig_network_key: str = 'flowsig_network',
                                 flowsig_expr_key: str = 'X_flow'):
     

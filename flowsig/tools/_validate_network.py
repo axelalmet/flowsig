@@ -10,7 +10,7 @@ def filter_low_confidence_edges(adata: sc.AnnData,
                                 edge_threshold: float,
                                 flowsig_network_key: str = 'flowsig_network',
                                 adjacency_key: str = 'adjacency',
-                                filtered_adjacency_key: str = 'adjacency_filtered'):
+                                filtered_key: str = 'filtered'):
     """
     Validate the learned CPDAG from UT-IGSP by checking edges against the assumed
     biological flow model, inflow signal -> gene expression module -> outflow signal.
@@ -49,7 +49,10 @@ def filter_low_confidence_edges(adata: sc.AnnData,
     """
 
     # Get the adjacency
-    adjacency = adata.uns[flowsig_network_key][adjacency_key]
+    adjacency = adata.uns[flowsig_network_key]['network'][adjacency_key]
+    flow_vars = adata.uns[flowsig_network_key]['flow_var_info'].index.tolist()
+    flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
+
     cpdag = gpm.PDAG.from_amat(adjacency)
 
     adjacency_filtered = adjacency.copy()
@@ -58,12 +61,14 @@ def filter_low_confidence_edges(adata: sc.AnnData,
     total_edge_weights = {}
 
     nonzero_rows, nonzero_cols = adjacency.nonzero()
+
     for i in range(len(nonzero_rows)):
+
         row_ind = nonzero_rows[i]
         col_ind = nonzero_cols[i]
 
-        node_1 = adata.uns[flowsig_network_key]['flow_vars'][row_ind]
-        node_2 = adata.uns[flowsig_network_key]['flow_vars'][col_ind]
+        node_1 = flow_vars[row_ind]
+        node_2 = flow_vars[col_ind]
 
         edge = (node_1, node_2)            
 
@@ -75,8 +80,8 @@ def filter_low_confidence_edges(adata: sc.AnnData,
 
     for arc in cpdag.arcs:
 
-        node_1 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[0]]
-        node_2 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[1]]
+        node_1 = flow_vars[tuple(arc)[0]]
+        node_2 = flow_vars[tuple(arc)[1]]
 
         edge_weight =  adjacency[row_ind, col_ind]
 
@@ -87,30 +92,35 @@ def filter_low_confidence_edges(adata: sc.AnnData,
 
     for edge in cpdag.edges:
 
-        node_1 = adata.uns[flowsig_network_key]['flow_vars'][tuple(edge)[0]]
-        node_2 = adata.uns[flowsig_network_key]['flow_vars'][tuple(edge)[1]]
+        node_1 = flow_vars[tuple(edge)[0]]
+        node_2 = flow_vars[tuple(edge)[1]]
 
         # For directed arcs, we simply consider the total edge weights
         total_edge_weight = 0.0
 
         if (node_1, node_2) in total_edge_weights:
+
             total_edge_weight = total_edge_weights[(node_1, node_2)]
+
         else:
+
             total_edge_weight = total_edge_weights[(node_2, node_1)]
 
         # Need to account for both (node1, node2) and (node1, node1) as 
         # adjacency encodes directed network
         if total_edge_weight < edge_threshold: 
+
             adjacency_filtered[row_ind, col_ind] = 0.0
             adjacency_filtered[col_ind, row_ind] = 0.0
             
     # Save the "validated" adjacency
-    adata.uns[flowsig_network_key][filtered_adjacency_key] = adjacency_filtered
+    filtered_adjacency_key = adjacency_key + '_' + filtered_key
+    adata.uns[flowsig_network_key]['network'][filtered_adjacency_key] = adjacency_filtered
 
 def apply_biological_flow(adata: sc.AnnData,
                         flowsig_network_key: str = 'flowsig_network',
                         adjacency_key: str = 'adjacency',
-                        validated_adjacency_key: str = 'adjacency_validated'):
+                        validated_key: str = 'validated'):
     """
     Validate the learned CPDAG from UT-IGSP by checking edges against the assumed
     biological flow model, inflow signal -> gene expression module -> outflow signal.
@@ -144,19 +154,21 @@ def apply_biological_flow(adata: sc.AnnData,
     """
 
     # Get the adjacency
-    adjacency = adata.uns[flowsig_network_key][adjacency_key]
-    cpdag = gpm.PDAG.from_amat(adjacency)
+    adjacency = adata.uns[flowsig_network_key]['network'][adjacency_key]
+    flow_vars = adata.uns[flowsig_network_key]['flow_var_info'].index.tolist()
+    flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
 
+    cpdag = gpm.PDAG.from_amat(adjacency)
     adjacency_validated = adjacency.copy()
     
     for arc in cpdag.arcs:
 
-        node_1 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[0]]
-        node_2 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[1]]
+        node_1 = flow_vars[tuple(arc)[0]]
+        node_2 = flow_vars[tuple(arc)[1]]
 
         # Classify node types
-        node_1_type = adata.uns[flowsig_network_key]['flow_var_types'][node_1]
-        node_2_type = adata.uns[flowsig_network_key]['flow_var_types'][node_2]
+        node_1_type = flow_var_info.loc[node_1]['Type']
+        node_2_type = flow_var_info.loc[node_2]['Type']
 
         # Now we decide whether or not to add the  edges
         add_edge = False
@@ -178,16 +190,20 @@ def apply_biological_flow(adata: sc.AnnData,
             add_edge = True
 
         if not add_edge:
+
+            row_ind = list(flow_vars).index(node_1)
+            col_ind = list(flow_vars).index(node_2)
+
             adjacency_validated[row_ind, col_ind] = 0.0
 
     for edge in cpdag.edges:
 
-        node_1 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[0]]
-        node_2 = adata.uns[flowsig_network_key]['flow_vars'][tuple(arc)[1]]
+        node_1 = flow_vars[tuple(edge)[0]]
+        node_2 = flow_vars[tuple(edge)[1]]
 
         # Classify node types
-        node_1_type = adata.uns[flowsig_network_key]['flow_var_types'][node_1]
-        node_2_type = adata.uns[flowsig_network_key]['flow_var_types'][node_2]
+        node_1_type = flow_var_info.loc[node_1]['Type']
+        node_2_type = flow_var_info.loc[node_2]['Type']
 
         # Define the edge because we may need to reverse it
         edge = (node_1, node_2)
@@ -220,26 +236,27 @@ def apply_biological_flow(adata: sc.AnnData,
 
         if not add_edge:
 
-            row_ind = list(adata.uns[flowsig_network_key]['flow_vars']).index(node_1)
-            col_ind = list(adata.uns[flowsig_network_key]['flow_vars']).index(node_2)
+            row_ind = list(flow_vars).index(node_1)
+            col_ind = list(flow_vars).index(node_2)
 
             # If we reversed the edge, make sure we get the right edge right:
             if edge[0] != node_1:
 
-                row_ind = list(adata.uns[flowsig_network_key]['flow_vars']).index(node_2)
-                col_ind = list(adata.uns[flowsig_network_key]['flow_vars']).index(node_1)
+                row_ind = list(flow_vars).index(node_2)
+                col_ind = list(flow_vars).index(node_1)
 
             adjacency_validated[row_ind, col_ind] = 0.0
     
     # Save the "validated" adjacency
-    adata.uns[flowsig_network_key][validated_adjacency_key] = adjacency_validated
+    validated_adjacency_key = adjacency_key + '_' + validated_key
+    adata.uns[flowsig_network_key]['network'][validated_adjacency_key] = adjacency_validated
 
 def construct_intercellular_flow_network(adata: sc.AnnData,
                         flowsig_network_key: str = 'flowsig_network',
                         adjacency_key: str = 'adjacency_validated'):
     
-    flow_vars = adata.uns[flowsig_network_key]['flow_vars']
-    flow_adjacency = adata.uns[flowsig_network_key][adjacency_key]
+    flow_vars = flow_vars
+    flow_adjacency = adata.uns[flowsig_network_key]['network'][adjacency_key]
 
     nonzero_rows, nonzero_cols = flow_adjacency.nonzero()
 

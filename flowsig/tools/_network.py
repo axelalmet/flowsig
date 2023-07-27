@@ -105,7 +105,7 @@ def run_utigsp(adata: ad.AnnData,
     control_samples = adata_control.obsm[flowsig_expr_key] # Define the control data
     
     adata_perturbed = adata[adata.obs[condition_key] != control_key]
-    perturbed_keys = [cond for cond in adata.obs[condition_key] if cond != control_key]
+    perturbed_keys = [cond for cond in adata.obs[condition_key].unique() if cond != control_key]
     perturbed_samples = [adata_perturbed[adata_perturbed.obs[condition_key] == cond].obsm[flowsig_expr_key] for cond in perturbed_keys] # Get the perturbed data
     perturbed_resampled = []
 
@@ -176,6 +176,7 @@ def run_utigsp(adata: ad.AnnData,
     control_resampled = control_resampled[:, nonzero_flow_vars_indices]
 
     for i, resampled in enumerate(perturbed_resampled):
+
         perturbed_resampled[i] = resampled[:, nonzero_flow_vars_indices]
 
     ### Run UT-IGSP using partial correlation  
@@ -190,7 +191,7 @@ def run_utigsp(adata: ad.AnnData,
     # Assume unknown interventions for UT-IGSP
     setting_list = [dict(known_interventions=[]) for _ in perturbed_resampled]
 
-    ## Run UT-IGSP by considering all possible initial permutations
+    # Run UT-IGSP by considering all possible initial permutations
     est_dag, est_targets_list = unknown_target_igsp(setting_list,
                                                         nodes,
                                                         ci_tester,
@@ -352,8 +353,6 @@ def learn_intercellular_flows(adata: ad.AnnData,
             nz_indices = res['nonzero_flow_vars_indices']
             adjacency = res['adjacency_cpdag']
             pert_indices = res['perturbed_targets_indices']
-
-            print(adjacency.shape)
             
             # Update the bagged adjacency
             bagged_adjacency[np.ix_(nz_indices, nz_indices)] += adjacency
@@ -421,4 +420,4 @@ def learn_intercellular_flows(adata: ad.AnnData,
                                     'adjacency': bagged_adjacency}
 
     # Store the results
-    adata.uns[flowsig_key] = flowsig_network_results
+    adata.uns[flowsig_key]['network'] = flowsig_network_results

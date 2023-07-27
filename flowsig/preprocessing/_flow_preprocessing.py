@@ -154,7 +154,7 @@ def determine_spatially_flowing_vars(adata: sc.AnnData,
         adata_inflow.obsm['spatial'] = adata.obsm['spatial']
 
         # Can't have spatial connectivities without spatial coordinates, lol
-        if 'spatial_connectivities' not in adata.obsp['spatial_connectivities']:
+        if 'spatial_connectivities' not in adata.obsp:
 
             coord_types = ['grid', 'generic']
             

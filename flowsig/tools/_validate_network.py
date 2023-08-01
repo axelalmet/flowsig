@@ -253,9 +253,11 @@ def apply_biological_flow(adata: sc.AnnData,
 
 def construct_intercellular_flow_network(adata: sc.AnnData,
                         flowsig_network_key: str = 'flowsig_network',
-                        adjacency_key: str = 'adjacency_validated'):
+                        adjacency_key: str = 'adjacency'):
     
-    flow_vars = flow_vars
+    flow_vars = adata.uns[flowsig_network_key]['flow_var_info'].index.tolist()
+    flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
+
     flow_adjacency = adata.uns[flowsig_network_key]['network'][adjacency_key]
 
     nonzero_rows, nonzero_cols = flow_adjacency.nonzero()
@@ -290,8 +292,8 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         node_2 = flow_vars[tuple(arc)[1]]
 
         # Classify node types
-        node_1_type = adata.uns[flowsig_network_key]['flow_var_types'][node_1]
-        node_2_type = adata.uns[flowsig_network_key]['flow_var_types'][node_2]
+        node_1_type = flow_var_info.loc[node_1]['Type']
+        node_2_type = flow_var_info.loc[node_2]['Type']
 
         # Now we decide whether or not to add the damn edges
         add_edge = False
@@ -329,6 +331,8 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
 
             flow_network.add_edge(*edge)
             flow_network.edges[edge[0], edge[1]]['weight'] = edge_weight / total_edge_weight
+            flow_network.nodes[edge[0]]['type'] = node_1_type
+            flow_network.nodes[edge[1]]['type'] = node_2_type
 
     for edge in cpdag.edges:
 
@@ -336,8 +340,8 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         node_2 = flow_vars[tuple(arc)[1]]
 
         # Classify node types
-        node_1_type = adata.uns[flowsig_network_key]['flow_var_types'][node_1]
-        node_2_type = adata.uns[flowsig_network_key]['flow_var_types'][node_2]
+        node_1_type = flow_var_info.loc[node_1]['Type']
+        node_2_type = flow_var_info.loc[node_2]['Type']
 
         # Define the edge because we may need to reverse it
         edge = (node_1, node_2)
@@ -353,11 +357,11 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
             add_edge = True
             edge = (edge[1], edge[0])
 
-        if ( (node_1_type == 'module')&(node_2_type == 'ligand') ):
+        if ( (node_1_type == 'module')&(node_2_type == 'outflow') ):
 
             add_edge = True
 
-        if ( (node_1_type == 'ligand')&(node_2_type == 'module') ):
+        if ( (node_1_type == 'outflow')&(node_2_type == 'module') ):
 
             add_edge = True
             edge = (edge[1], edge[0])
@@ -381,11 +385,15 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
 
             flow_network.add_edge(*edge)
             flow_network.edges[edge[0], edge[1]]['weight'] = min(total_edge_weight, 1.0)
+            flow_network.nodes[edge[0]]['type'] = node_1_type
+            flow_network.nodes[edge[1]]['type'] = node_2_type
 
             # Add the other way if we have modules
             if ((node_1_type == 'module')&(node_2_type == 'module')):
 
                 flow_network.add_edge(edge[1], edge[0])
                 flow_network.edges[edge[1], edge[0]]['weight'] = min(total_edge_weight, 1.0)
+                flow_network.nodes[edge[0]]['type'] = node_2_type
+                flow_network.nodes[edge[1]]['type'] = node_1_type
 
     return flow_network

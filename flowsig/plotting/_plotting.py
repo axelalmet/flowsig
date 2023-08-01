@@ -58,7 +58,6 @@ def plot_intercellular_flows_from_inflows(adata: sc.AnnData,
         node_colours[outflow_var] = palette_network[count]
         count += 1
 
-    print(inflow_vars + associated_gems + downstream_outflows)
     resultant_pattern_graph = flow_network.subgraph(inflow_vars + associated_gems + downstream_outflows)
 
     for node in resultant_pattern_graph.nodes():
@@ -87,7 +86,6 @@ def plot_intercellular_flows_from_inflows(adata: sc.AnnData,
 
     resultant_pattern_graph_pos = nx.multipartite_layout(resultant_pattern_graph, subset_key='level', align=align_mode, scale=2.0)
 
-    print(resultant_pattern_graph_pos)
 
     resultant_pattern_graph_edge_colours = [node_colours[edge[0]] for edge in resultant_pattern_graph.edges()]
     edge_widths = [width_scale*resultant_pattern_graph[u][v]['weight'] for u,v in resultant_pattern_graph.edges()]
@@ -101,6 +99,7 @@ def plot_intercellular_flows_from_inflows(adata: sc.AnnData,
     plt.margins(x=x_margin_offset)
     plt.margins(y=y_margin_offset)
     plt.box(False)
+    plt.show()
 
 def plot_intercellular_flows_from_gems(adata: sc.AnnData,
                                           gem_vars: Union[str, Sequence[str]],
@@ -192,6 +191,7 @@ def plot_intercellular_flows_from_gems(adata: sc.AnnData,
     plt.margins(x=x_margin_offset)
     plt.margins(y=y_margin_offset)
     plt.box(False)
+    plt.show()
 
 def plot_intercellular_flows_from_outflows(adata: sc.AnnData,
                                           outflow_vars: Union[str, Sequence[str]],
@@ -277,3 +277,4 @@ def plot_intercellular_flows_from_outflows(adata: sc.AnnData,
     plt.margins(x=x_margin_offset)
     plt.margins(y=y_margin_offset)
     plt.box(False)
+    plt.show()

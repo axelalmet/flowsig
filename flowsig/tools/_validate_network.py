@@ -221,11 +221,11 @@ def apply_biological_flow(adata: sc.AnnData,
             edge = (edge[1], edge[0])
             add_edge = True
 
-        if ( (node_1_type == 'module')&(node_2_type == 'ligand') ):
+        if ( (node_1_type == 'module')&(node_2_type == 'outflow') ):
 
             add_edge = True
 
-        if ( (node_1_type == 'ligand')&(node_2_type == 'module') ):
+        if ( (node_1_type == 'outflow')&(node_2_type == 'module') ):
 
             edge = (edge[1], edge[0])
             add_edge = True
@@ -278,7 +278,6 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         else:
             if (edge[1], edge[0]) in total_edge_weights:
                 total_edge_weights[(edge[1], edge[0])] += flow_adjacency[row_ind, col_ind]
-    
     
     flow_network = nx.DiGraph()
 
@@ -336,8 +335,8 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
 
     for edge in cpdag.edges:
 
-        node_1 = flow_vars[tuple(arc)[0]]
-        node_2 = flow_vars[tuple(arc)[1]]
+        node_1 = flow_vars[tuple(edge)[0]]
+        node_2 = flow_vars[tuple(edge)[1]]
 
         # Classify node types
         node_1_type = flow_var_info.loc[node_1]['Type']

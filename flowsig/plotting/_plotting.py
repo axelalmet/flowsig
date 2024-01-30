@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import seaborn as sns
 import scanpy as sc
+import numpy as np 
+import pandas as pd
 from typing import Union, Sequence
 
 palette_network = list(sns.color_palette("tab20") \
@@ -10,9 +12,84 @@ palette_network = list(sns.color_palette("tab20") \
                        + sns.color_palette("Set1")\
                        + sns.color_palette("Set2"))
 
-# def plot_differentially_inflowing_signals():
+def subset_for_flow_type(adata: sc.AnnData,
+                         var_type: str = 'all',
+                         flowsig_expr_key: str = 'X_flow',
+                         flowsig_network_key: str = 'flowsig_network'):
+    
+    var_types = ['all', 'inflow', 'module', 'outflow']
 
-# def plot_differentially_outflowing_signals():
+    if var_type not in var_types:
+        ValueError("Need to specify var_type as one of the following: %s"  % var_types)
+
+    X_flow = adata.obsm[flowsig_expr_key]
+    adata_subset = sc.AnnData(X=X_flow)
+    adata_subset.obs = adata.obs
+    adata_subset.var = adata.uns[flowsig_network_key]['flow_var_info']
+
+    if var_type != 'all':
+
+        adata_subset = adata_subset[:, adata_subset.var['Type'].isin(list(var_type))]
+
+    return adata_subset
+
+def label_point(x, y, val, ax):
+
+    a = pd.concat({'x': x, 'y': y, 'val': val}, axis=1)
+
+    for i, point in a.iterrows():
+
+        ax.text(point['x']+0.3, point['y'] + 0.1, str(point['val']), fontdict={'size':12.0})
+
+
+def plot_differentially_flowing_signals(adata: sc.AnnData,
+                                        condition_key: str,
+                                        pert_key: str,
+                                        var_type: str = 'all',
+                                        flowsig_expr_key: str = 'X_flow',
+                                        flowsig_network_key: str = 'flowsig_network',
+                                        qval_threshold: float = 0.05,
+                                        logfc_threshold: float = 0.5,
+                                        label_lowqval: bool = False):
+
+    var_types = ['all', 'inflow', 'module', 'outflow']
+
+    adata_subset = subset_for_flow_type(adata = adata,
+                                        var_type = var_type,
+                                        flowsig_expr_key = flowsig_expr_key,
+                                        flowsig_network_key = flowsig_network_key)
+    
+    if condition_key not in adata_subset.uns:
+        adata_subset.uns['log1p'] = {'base': None}
+        sc.tl.rank_genes_groups(adata_subset, key_added=condition_key, groupby=condition_key, method='wilcoxon')
+
+    result = sc.get.rank_genes_groups_df(adata_subset, group=pert_key, key=condition_key).copy()
+    result["-logQ"] = -np.log(result["pvals"].astype("float"))
+    lowqval_de_received = result.loc[(abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
+    other_de_received = result.loc[(abs(result["logfoldchanges"]) <= logfc_threshold)|(abs(result["pvals_adj"]) >= qval_threshold)]
+
+    fig, ax = plt.subplots()
+    sns.regplot(
+        x=other_de_received["logfoldchanges"],
+        y=other_de_received["-logQ"],
+        fit_reg=False,
+        scatter_kws={"s": 50},
+    )
+    sns.regplot(
+        x=lowqval_de_received["logfoldchanges"],
+        y=lowqval_de_received["-logQ"],
+        fit_reg=False,
+        scatter_kws={"s": 50},
+    )
+    ax.set_xlabel("log2 FC")
+    ax.set_ylabel("-log Q-value")
+
+    if label_lowqval:
+        label_point(lowqval_de_received['logfoldchanges'],
+                    lowqval_de_received['-logQ'],
+                    lowqval_de_received['names'],
+                    plt.gca())  
+
 
 def plot_intercellular_flows_from_inflows(adata: sc.AnnData,
                                           inflow_vars: Union[str, Sequence[str]],

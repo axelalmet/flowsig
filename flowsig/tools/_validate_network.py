@@ -112,11 +112,8 @@ def filter_low_confidence_edges(adata: sc.AnnData,
         # adjacency encodes directed network
         if total_edge_weight >= edge_threshold: 
 
-            row_ind = flow_vars.index(node_1)
-            col_ind = flow_vars.index(node_2)
-
-            adjacency_filtered[row_ind, col_ind] = adjacency[row_ind, col_ind]
-            adjacency_filtered[col_ind, row_ind] = adjacency[col_ind, row_ind]
+            adjacency_filtered[tuple(edge)[0], tuple(edge)[0][1]] = adjacency[tuple(edge)[0], tuple(edge)[0][1]]
+            adjacency_filtered[tuple(edge)[1], tuple(edge)[0]] = adjacency[tuple(edge)[1], tuple(edge)[0]]
             
     # Save the "validated" adjacency
     filtered_adjacency_key = adjacency_key + '_' + filtered_key
@@ -343,7 +340,7 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         node_2_type = flow_var_info.loc[node_2]['Type']
 
         # Define the edge because we may need to reverse it
-        edge = (node_1, node_2)
+        undirected_edge = (node_1, node_2)
 
         add_edge = False
         # If there's a link from the expressed morphogen to the received morphogen FOR the same morphogen
@@ -354,7 +351,7 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         if ( (node_1_type == 'module')&(node_2_type == 'inflow') ):
 
             add_edge = True
-            edge = (edge[1], edge[0])
+            undirected_edge = (tuple(edge)[1], tuple(edge)[0])
 
         if ( (node_1_type == 'module')&(node_2_type == 'outflow') ):
 
@@ -363,7 +360,7 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         if ( (node_1_type == 'outflow')&(node_2_type == 'module') ):
 
             add_edge = True
-            edge = (edge[1], edge[0])
+            undirected_edge = (tuple(edge)[1], tuple(edge)[0])
 
         if ((node_1_type == 'module')&(node_2_type == 'module')):
 
@@ -374,25 +371,25 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
             # Get the total edge weight
             total_edge_weight = 0.0
 
-            if edge in total_edge_weights:
+            if undirected_edge in total_edge_weights:
 
-                total_edge_weight = total_edge_weights[edge]
+                total_edge_weight = total_edge_weights[undirected_edge]
 
             else:
 
-                total_edge_weight = total_edge_weights[(edge[1], edge[0])]
+                total_edge_weight = total_edge_weights[(undirected_edge[1], undirected_edge[0])]
 
-            flow_network.add_edge(*edge)
-            flow_network.edges[edge[0], edge[1]]['weight'] = min(total_edge_weight, 1.0)
-            flow_network.nodes[edge[0]]['type'] = node_1_type
-            flow_network.nodes[edge[1]]['type'] = node_2_type
+            flow_network.add_edge(*undirected_edge)
+            flow_network.edges[undirected_edge[0], undirected_edge[1]]['weight'] = min(total_edge_weight, 1.0)
+            flow_network.nodes[undirected_edge[0]]['type'] = node_1_type
+            flow_network.nodes[undirected_edge[1]]['type'] = node_2_type
 
             # Add the other way if we have modules
             if ((node_1_type == 'module')&(node_2_type == 'module')):
 
-                flow_network.add_edge(edge[1], edge[0])
-                flow_network.edges[edge[1], edge[0]]['weight'] = min(total_edge_weight, 1.0)
-                flow_network.nodes[edge[0]]['type'] = node_2_type
-                flow_network.nodes[edge[1]]['type'] = node_1_type
+                flow_network.add_edge(undirected_edge[1], undirected_edge[0])
+                flow_network.edges[undirected_edge[1], undirected_edge[0]]['weight'] = min(total_edge_weight, 1.0)
+                flow_network.nodes[undirected_edge[0]]['type'] = node_2_type
+                flow_network.nodes[undirected_edge[1]]['type'] = node_1_type
 
     return flow_network

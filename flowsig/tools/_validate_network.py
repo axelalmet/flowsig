@@ -112,7 +112,7 @@ def filter_low_confidence_edges(adata: sc.AnnData,
         # adjacency encodes directed network
         if total_edge_weight >= edge_threshold: 
 
-            adjacency_filtered[tuple(edge)[0], tuple(edge)[0][1]] = adjacency[tuple(edge)[0], tuple(edge)[0][1]]
+            adjacency_filtered[tuple(edge)[0], tuple(edge)[1]] = adjacency[tuple(edge)[0], tuple(edge)[1]]
             adjacency_filtered[tuple(edge)[1], tuple(edge)[0]] = adjacency[tuple(edge)[1], tuple(edge)[0]]
             
     # Save the "validated" adjacency

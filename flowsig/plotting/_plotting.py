@@ -103,6 +103,7 @@ def plot_intercellular_flows_from_inflows(adata: sc.AnnData,
     flow_vars = adata.uns[flowsig_network_key]['flow_var_info'].index.tolist()
     flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
 
+    inflow_vars = []
     all_gems = [node for node in flow_vars\
                         if flow_var_info.loc[node]['Type'] == 'module']
     all_outflow_vars = [node for node in flow_vars\

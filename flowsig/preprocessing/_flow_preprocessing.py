@@ -64,8 +64,6 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
     perturbed_conditions = [cond for cond in adata.obs[condition_key].unique().tolist() if cond != control_key]
     flow_var_info = adata.uns[flowsig_network_key]['flow_var_info']
 
-    # print(flow_var_info)
-
     # Construct inflow and outflow adata objects
     adata_inflow = subset_for_flow_type(adata,
                                         var_type = 'inflow',

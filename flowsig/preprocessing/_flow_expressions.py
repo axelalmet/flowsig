@@ -303,7 +303,7 @@ def construct_inflow_signals_cellphonedb(adata: sc.AnnData,
                     
                 else:
                     interactions_for_receptor = unique_inflow_vars_and_interactions[receptor]
-                    interactions_for_receptor.append(interaction)
+                    interactions_for_receptor.append(interaction)  
                     unique_inflow_vars_and_interactions[receptor] = interactions_for_receptor
                 
     inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
@@ -377,15 +377,17 @@ def construct_outflow_signals_cellphonedb(adata: sc.AnnData,
 
         for ligand in ligands:
             if (ligand in adata.var_names):
+
+
                 if (ligand not in outflow_vars):
                     outflow_vars.append(ligand)
 
                     relevant_interactions[ligand] = [inter]
 
-            else:
-                interactions_with_ligand = relevant_interactions[ligand]
-                interactions_with_ligand.append(inter)
-                relevant_interactions[ligand] = interactions_with_ligand
+                else:
+                    interactions_with_ligand = relevant_interactions[ligand]
+                    interactions_with_ligand.append(inter)
+                    relevant_interactions[ligand] = interactions_with_ligand
 
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
 
@@ -461,6 +463,248 @@ def construct_flows_from_cellphonedb(adata: sc.AnnData,
     adata.obsm[flowsig_expr_key] = flow_expressions
     adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
     
+def construct_inflow_signals_liana(adata: sc.AnnData,
+                                    liana_output_key: str, 
+                                    use_tfs: bool = False,
+                                    model_organism: str = 'human'):
+    
+    model_organisms = ['human', 'mouse']
+
+    if model_organism not in model_organisms:
+        raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
+    
+    if use_tfs:
+    
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        data_path = os.path.join(data_dir, 'cellchat_interactions_and_tfs_' + model_organism + '.csv')
+
+        cellchat_interactions_and_tfs = pd.read_csv(data_path, index_col=0)
+
+        ccc_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
+        inflow_vars = sorted(ccc_output_merged['receptor_complex'].unique().tolist())
+        inflow_vars = [var.replace('_', '+') for var in inflow_vars]
+
+        unique_inflow_vars_and_interactions = {}
+
+        # The inflow variables are constructed from receptor gene expression
+        # that will be weighted by the average expression of their downstream
+        # TF targets. These can be multi-units, but because of the weighting,
+        # we hestitate to call them receptors in the context of cellular flows.
+        for inflow_var in inflow_vars:
+            relevant_rec = inflow_var.replace('+', '_')
+
+            relevant_ligands = sorted(ccc_output_merged[ccc_output_merged['receptor_complex'] == relevant_rec]['ligand_complex'].unique().tolist())
+            interactions_for_receptor = []
+
+            for lig in relevant_ligands:
+                if '+' in inflow_var:
+                    interactions_for_receptor.append(lig + ' - ' + '(' + inflow_var + ')')
+                else:
+                    interactions_for_receptor.append(lig + ' - ' + inflow_var)
+
+            unique_inflow_vars_and_interactions[inflow_var] = interactions_for_receptor
+                
+        inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
+        num_inflow_vars = len(inflow_vars)
+
+        inflow_expressions = np.zeros((adata.n_obs, num_inflow_vars)) 
+
+        for i, receptor in enumerate(inflow_vars):
+            
+            receptor_expression = np.ones((adata.n_obs, ))
+            
+            split_receptor = receptor.split('+')
+            considered_receptors = []
+            
+            for unit in split_receptor:
+                
+                if unit not in adata.var_names:
+                    print(unit)
+                    
+                else:
+                    
+                    unit_expression = adata[:, unit].X.toarray().flatten()
+
+                    receptor_expression *= unit_expression
+                    considered_receptors.append(unit)
+                    
+            if len(considered_receptors) != 0:
+                inflow_expressions[:, i] = receptor_expression**(1.0 / len(considered_receptors))
+            
+        inflow_expressions_adjusted = inflow_expressions.copy()
+
+        inflow_interactions = []
+        unique_inflow_vars_and_tfs = {}
+
+        for i, receptor in enumerate(inflow_vars):
+            
+            interactions_for_receptor = unique_inflow_vars_and_interactions[receptor]
+            
+            relevant_interactions = cellchat_interactions_and_tfs[cellchat_interactions_and_tfs['interaction_name_2'].isin(interactions_for_receptor)]
+            
+            joined_interactions = '/'.join(sorted(interactions_for_receptor))
+            inflow_interactions.append(joined_interactions)
+            
+            downstream_tfs = []
+            
+            # Go through each category
+            possible_downstream_tfs = relevant_interactions['Receptor-TF-combined'].dropna().tolist()
+            
+            for unit in possible_downstream_tfs:
+                split_unit = unit.split('_')
+                for tf in split_unit:
+                    if tf not in downstream_tfs:
+                        downstream_tfs.append(tf)
+                        
+            downstream_tfs = np.intersect1d(downstream_tfs, adata.var_names)
+            
+            unique_inflow_vars_and_tfs[receptor] = sorted(list(downstream_tfs))
+            
+            if len(downstream_tfs) != 0:
+                
+                average_tf_expression = np.zeros((adata.n_obs, ))
+                
+                for tf in downstream_tfs:
+                    
+                    average_tf_expression += adata[:, tf].X.toarray().flatten()
+                    
+                average_tf_expression /= len(downstream_tfs)
+                
+                inflow_expressions_adjusted[:, i] *= average_tf_expression
+                
+        inflow_downstream_tfs = []
+        for i, inflow_var in enumerate(inflow_vars):
+            
+            interactions_for_receptor = unique_inflow_vars_and_interactions[inflow_var]
+            downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
+            inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
+            
+        adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
+        adata_inflow.var.index = pd.Index(inflow_vars)
+        adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
+        adata_inflow.var['type'] = 'inflow' # Define variable types
+        adata_inflow.var['interactions'] = inflow_interactions
+
+        return adata_inflow, inflow_vars
+    
+def construct_outflow_signals_liana(adata: sc.AnnData,
+                                    liana_output_key: str, 
+                                    ):
+    liana_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
+   
+    outflow_vars = sorted(liana_output_merged['ligand_complex'].unique().tolist())
+    relevant_interactions = {}
+
+    for outflow_var in outflow_vars:
+            
+        interactions_with_ligand = []
+
+        relevant_receptors = sorted(liana_output_merged[liana_output_merged['ligand_complex'] == outflow_var]['receptor_complex'].unique().tolist())
+
+        for rec in relevant_receptors:
+            
+            inter = outflow_var + ' - ' + rec.replace('_', '+')
+            interactions_with_ligand.append(inter)
+
+        relevant_interactions[outflow_var] = interactions_with_ligand
+
+    outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
+
+    for i, signal in enumerate(outflow_vars):
+        outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
+
+    adata_outflow = sc.AnnData(X=outflow_expressions)
+    adata_outflow.var.index = pd.Index(outflow_vars)
+    adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
+    adata_outflow.var['type'] = 'outflow' # Define variable types
+
+    relevant_interactions_of_ligands = []
+    for ligand in outflow_vars:
+        interactions_of_ligand = relevant_interactions[ligand]
+        relevant_interactions_of_ligands.append('/'.join(interactions_of_ligand))
+        
+    adata_outflow.var['interactions'] = relevant_interactions_of_ligands # Define variable types
+
+    return adata_outflow, outflow_vars
+   
+def construct_flows_from_liana(adata: sc.AnnData,
+                                liana_output_key: str,
+                                gem_expr_key: str = 'X_gem',
+                                scale_gem_expr: bool = True,
+                                use_tfs: bool = False,
+                                model_organism: str= 'mouse',
+                                flowsig_network_key: str = 'flowsig_network',
+                                flowsig_expr_key: str = 'X_flow'):
+
+    # Define the expression
+    adata_outflow, outflow_vars = construct_outflow_signals_liana(adata, liana_output_key)
+
+    adata_inflow, inflow_vars = construct_inflow_signals_liana(adata, liana_output_key, use_tfs, model_organism)
+
+    adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
+
+    # Determine the flow_variables
+    flow_variables = outflow_vars + inflow_vars + flow_gem_vars
+
+    flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
+
+    for i, outflow_var in enumerate(outflow_vars):
+        flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
+
+    for i, inflow_var in enumerate(inflow_vars):
+        flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
+
+    for i, gem in enumerate(flow_gem_vars):
+        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
+
+    flow_variable_types = adata_outflow.var['type'].tolist() \
+                            + adata_inflow.var['type'].tolist() \
+                            + adata_gem.var['type'].tolist()
+    
+    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
+                            + adata_inflow.var['downstream_tfs'].tolist() \
+                            + adata_gem.var['downstream_tfs'].tolist()
+    
+    flow_interactions = adata_outflow.var['interactions'].tolist() \
+                            + adata_inflow.var['interactions'].tolist() \
+                            + adata_gem.var['interactions'].tolist()
+
+    # Store the type, relevant downstream_TF, and received interactions for each variable
+    # Store all the information on the flow variables
+    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
+                                 data = {'Type': flow_variable_types,
+                                      'Downstream_TF': flow_downstream_tfs,
+                                      'Interaction': flow_interactions})
+    
+    adata.obsm[flowsig_expr_key] = flow_expressions
+    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
+
+def construct_inflow_signals_commot(adata: sc.AnnData,
+                                    commot_output_key: str):
+
+    # Inflow variables are inferred from outflow variables
+    outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
+    inflow_vars = ['inflow-' + outflow_var for outflow_var in outflow_vars]
+
+
+    inflow_interactions = []
+    inflow_expressions = np.zeros((adata.n_obs, len(inflow_vars)))
+    for i, inflow_var in inflow_vars:
+        lig = inflow_var.strip('inflow-')
+        inferred_interactions = [pair.strip('r-') for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
+        inflow_interactions.append('/'.join(sorted(inferred_interactions)))
+
+        # We sum the total received signal across each interaction at each spot
+        for inter in inferred_interactions:
+            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver'][inter]
+
+    adata_inflow = sc.AnnData(X=inflow_expressions)
+    adata_inflow.var.index = pd.Index(inflow_vars)
+    adata_inflow.var['downstream_tfs'] = ''
+    adata_inflow.var['interactions'] = inflow_interactions
+
+    return adata_inflow, inflow_vars
+
 def construct_outflow_signals_commot(adata: sc.AnnData,
                                     commot_output_key: str, 
                                     ):

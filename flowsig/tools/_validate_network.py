@@ -90,7 +90,7 @@ def filter_low_confidence_edges(adata: sc.AnnData,
         # Need to account for both (node1, node2) and (node1, node1) as 
         # adjacency encodes directed network
         if edge_weight >= edge_threshold: 
-            adjacency_filtered = edge_weight
+            adjacency_filtered[row_ind, col_ind] = edge_weight
 
     for edge in cpdag.edges:
 

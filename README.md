@@ -1,4 +1,4 @@
-![image](https://github.com/axelalmet/flowsig/assets/10396553/11ac8726-19ab-47a3-85e9-cf6bf13d1789)# FlowSig
+# FlowSig
 Python package to infer directed intercellular flows described by ligand-receptor interactions driving tissue-scale gene expression patterning. 
 
 FlowSig requires:

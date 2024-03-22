@@ -7,7 +7,8 @@ FlowSig requires:
 2. Cell-cell communication (CCC) inferred for each condition of interest. For non-spatial data, we require input from [CellChat](https://github.com/sqjin/CellChat). For ST data, we require input from [COMMOT](https://github.com/zcang/COMMOT).
 
 <details>
-## Installation
+  <summary>## Installation</summary>
+
 The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
 
 To generate a virtual environment, run the command. N.B. make sure you're using Python 3.8, for some reason pyliger does not like Python 3.9. At least, this is the case on an M1/M2 MacBook.
@@ -35,7 +36,8 @@ pip3 install git+https://github.com/willtownes/spatial-factorization-py.git#egg=
 ```
 </details>
 <details>
-## Application to non-spatial scRNA-seq of stimulated pancreatic islets
+  <summary>## Application to non-spatial scRNA-seq of stimulated pancreatic islets</summary>
+
 
 Here, we show how to apply FlowSig to an scRNA-seq dataset of wildtype
 and stimulated human pancreatic islets, as originally studied in [Burkhardt et al. (2021)](https://www.nature.com/articles/s41587-020-00803-5).
@@ -165,7 +167,8 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
 ```
 </details>
 
-## Application to spatial Stereo-seq of E9.5 mouse embryo
+<details>
+  <summary>## ## Application to spatial Stereo-seq of E9.5 mouse embryo </summary>
 Here, we show how to apply FlowSig to a spatial Stereo-seq dataset of an E9.5 mouse embryo, as originally studied in [Chen et al. (2022)](https://doi.org/10.1016/j.cell.2022.04.003).
 The processed data and cell-cell communication inference, which was obtained using [COMMOT](),
 can be downloaded from the following Zenodo repository (will be provided ASAP!).
@@ -288,4 +291,4 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
                                                         flowsig_network_key = 'flowsig_network',
                                                         adjacency_key = 'adjacency_validated_filtered')
 ```
-
+</details>

@@ -6,6 +6,7 @@ FlowSig requires:
 1. Single-cell RNA-sequencing (scRNA-seq) data with cell state annotations that compare a baseline control to one or more perturbed conditions, e.g. disease severity, OR spatial transcriptomics (ST) data.
 2. Cell-cell communication (CCC) inferred for each condition of interest. For non-spatial data, we require input from [CellChat](https://github.com/sqjin/CellChat). For ST data, we require input from [COMMOT](https://github.com/zcang/COMMOT).
 
+<details>
 ## Installation
 The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
 
@@ -27,13 +28,13 @@ pip3 install .
 ```
 
 
-
 You will need to install NSF to infer spatial GEMS separately (see [here](https://github.com/willtownes/spatial-factorization-py))
 ```
 pip3 install git+https://github.com/willtownes/spatial-factorization-py.git#egg=spatial-factorization
 
 ```
-
+</details>
+<details>
 ## Application to non-spatial scRNA-seq of stimulated pancreatic islets
 
 Here, we show how to apply FlowSig to an scRNA-seq dataset of wildtype
@@ -162,6 +163,7 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
                                                         flowsig_network_key = 'flowsig_network',
                                                         adjacency_key = 'adjacency_validated_filtered')
 ```
+</details>
 
 ## Application to spatial Stereo-seq of E9.5 mouse embryo
 Here, we show how to apply FlowSig to a spatial Stereo-seq dataset of an E9.5 mouse embryo, as originally studied in [Chen et al. (2022)](https://doi.org/10.1016/j.cell.2022.04.003).

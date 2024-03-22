@@ -8,6 +8,7 @@ FlowSig requires:
 
 <details>
   <summary>Installation</summary>
+  
 ## Installation instructions
   
 The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
@@ -171,6 +172,7 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
 
 <details>
   <summary>Spatial example</summary>
+  
   ## Application to spatial Stereo-seq of E9.5 mouse embryo 
 Here, we show how to apply FlowSig to a spatial Stereo-seq dataset of an E9.5 mouse embryo, as originally studied in [Chen et al. (2022)](https://doi.org/10.1016/j.cell.2022.04.003).
 The processed data and cell-cell communication inference, which was obtained using [COMMOT](),

@@ -1,10 +1,12 @@
-# FlowSig
+![image](https://github.com/axelalmet/flowsig/assets/10396553/11ac8726-19ab-47a3-85e9-cf6bf13d1789)# FlowSig
 Python package to infer directed intercellular flows described by ligand-receptor interactions driving tissue-scale gene expression patterning. 
 
 FlowSig requires:
 
 1. Single-cell RNA-sequencing (scRNA-seq) data with cell state annotations that compare a baseline control to one or more perturbed conditions, e.g. disease severity, OR spatial transcriptomics (ST) data.
 2. Cell-cell communication (CCC) inferred for each condition of interest. For non-spatial data, we require input from [CellChat](https://github.com/sqjin/CellChat). For ST data, we require input from [COMMOT](https://github.com/zcang/COMMOT).
+
+The code used to generate all of the results in Almet et al., "Inferring pattern-driving intercellular flows from single-cell and spatial transcriptomics", can be found in another GitHub repository [here](https://github.com/axelalmet/FlowSigAnalysis_2023).
 
 <details>
   <summary>Installation</summary>

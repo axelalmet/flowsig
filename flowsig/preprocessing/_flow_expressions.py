@@ -593,13 +593,17 @@ def construct_outflow_signals_liana(adata: sc.AnnData,
     liana_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
    
     outflow_vars = sorted(liana_output_merged['ligand_complex'].unique().tolist())
+    outflow_vars = [var.replace('_', '+') for var in outflow_vars]
+
     relevant_interactions = {}
 
     for outflow_var in outflow_vars:
             
+        relevant_lig = outflow_var.replace('+', '_')
+
         interactions_with_ligand = []
 
-        relevant_receptors = sorted(liana_output_merged[liana_output_merged['ligand_complex'] == outflow_var]['receptor_complex'].unique().tolist())
+        relevant_receptors = sorted(liana_output_merged[liana_output_merged['ligand_complex'] == relevant_lig]['receptor_complex'].unique().tolist())
 
         for rec in relevant_receptors:
             
@@ -610,8 +614,27 @@ def construct_outflow_signals_liana(adata: sc.AnnData,
 
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
 
-    for i, signal in enumerate(outflow_vars):
-        outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
+    for i, ligand in enumerate(outflow_vars):
+            
+        ligand_expression = np.ones((adata.n_obs, ))
+
+        split_ligand = ligand.split('+')
+        considered_ligands = []
+        
+        for unit in split_ligand:
+            
+            if unit not in adata.var_names:
+                print(unit)
+                
+            else:
+                
+                unit_expression = adata[:, unit].X.toarray().flatten()
+
+                ligand_expression *= unit_expression
+                considered_ligands.append(unit)
+                
+        if len(considered_ligands) != 0:
+            outflow_expressions[:, i] = ligand_expression**(1.0 / len(considered_ligands))
 
     adata_outflow = sc.AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)

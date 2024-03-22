@@ -7,7 +7,7 @@ FlowSig requires:
 2. Cell-cell communication (CCC) inferred for each condition of interest. For non-spatial data, we require input from [CellChat](https://github.com/sqjin/CellChat). For ST data, we require input from [COMMOT](https://github.com/zcang/COMMOT).
 
 ## Installation
-The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger] and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
+The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
 
 To generate a virtual environment, run the command. N.B. make sure you're using Python 3.8, for some reason pyliger does not like Python 3.9. At least, this is the case on an M1/M2 MacBook.
 

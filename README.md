@@ -47,7 +47,9 @@ pip3 install git+https://github.com/willtownes/spatial-factorization-py.git#egg=
 Here, we show how to apply FlowSig to an scRNA-seq dataset of wildtype
 and stimulated human pancreatic islets, as originally studied in [Burkhardt et al. (2021)](https://www.nature.com/articles/s41587-020-00803-5).
 The processed data and cell-cell communication inference, which was obtained using CellChat,
-can be downloaded from the following Zenodo repository (will be provided ASAP!).
+can be downloaded from the following Zenodo [repository](https://zenodo.org/doi/10.5281/zenodo.10850397).
+
+You can also look at the code in a Jupyter notebook found [here](https://github.com/axelalmet/flowsig/blob/main/flowsig/tutorials/pancreatic_islets_scrnaseq_example.ipynb).
 
 ### Import packages
 ```
@@ -177,8 +179,10 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
   
   ## Application to spatial Stereo-seq of E9.5 mouse embryo 
 Here, we show how to apply FlowSig to a spatial Stereo-seq dataset of an E9.5 mouse embryo, as originally studied in [Chen et al. (2022)](https://doi.org/10.1016/j.cell.2022.04.003).
-The processed data and cell-cell communication inference, which was obtained using [COMMOT](),
-can be downloaded from the following Zenodo repository (will be provided ASAP!).
+The processed data and cell-cell communication inference, which was obtained using [COMMOT](https://commot.readthedocs.io/en/latest/tutorials.html),
+can be downloaded from the following Zenodo  [repository](https://zenodo.org/doi/10.5281/zenodo.10850397).
+
+You can also look at the code in a Jupyter notebook found [here](https://github.com/axelalmet/flowsig/blob/main/flowsig/tutorials/mouse_embryo_stereoseq_example.ipynb).
 
 ### Import packages
 ```

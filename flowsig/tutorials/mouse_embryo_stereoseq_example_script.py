@@ -2,15 +2,26 @@ import scanpy as sc
 import pandas as pd
 import flowsig as fs
 
-adata = sc.read('chen22_svg_E9.5.h5ad')
-condition_key = 'Condition'
+adata = sc.read('data/chen22_svg_E9.5.h5ad')
 
 # We construct 10 gene expression modules using the raw cell count.
-fs.construct_gems_using_pyliger(adata,
-                                n_gems = 10,
-                                layer_key = 'count')
+fs.construct_gems_using_nsf(adata,
+                            n_gems = 20,
+                            layer_key = 'count',
+                            length_scale = 5.0)
 
 commot_output_key = 'commot-cellchat'
+
+# For spatial data, we need to construct spatial blocks that are used for block bootstrapping, 
+# to preserve the spatial correlation of the gene expression data. The idea is that by sampling
+# within these spatial blocks, we will better preserve these spatial correlation structures
+# during bootstrapping. We construct the blocks using simple K-Means clustering over the spatial 
+# locations.
+fs.construct_spatial_blocks(adata,
+                             n_blocks=20,
+                             use_graph=False,
+                             spatial_block_key = "spatial_block",
+                             spatial_key = "spatial")
 
 # We first construct the potential cellular flows from the commot output
 fs.construct_flows_from_commot(adata,

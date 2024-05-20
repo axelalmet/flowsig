@@ -2,7 +2,7 @@ import scanpy as sc
 import pandas as pd
 import flowsig as fs
 
-adata = sc.read('burkhardt21_merged.h5ad')
+adata = sc.read('data/burkhardt21_merged.h5ad')
 condition_key = 'Condition'
 
 # We construct 10 gene expression modules using the raw cell count.
@@ -12,8 +12,8 @@ fs.construct_gems_using_pyliger(adata,
                                 condition_key = condition_key)
 
 # Make sure your keys for these align with their condition labels
-cellchat_Ctrl = pd.read('burkhardt21_leiden_communications_Ctrl.csv')
-cellchat_IFNg = pd.read('burkhardt21_leiden_communications_IFNg.csv')
+cellchat_Ctrl = pd.read('data/burkhardt21_leiden_communications_Ctrl.csv')
+cellchat_IFNg = pd.read('data/burkhardt21_leiden_communications_IFNg.csv')
 
 cellchat_output_key = 'cellchat_output'
 adata.uns[cellchat_output_key] = {'Ctrl': cellchat_Ctrl,

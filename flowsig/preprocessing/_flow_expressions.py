@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import numpy as np
 import scanpy as sc
 import pandas as pd
@@ -7,7 +7,7 @@ import os
 def construct_gem_expressions(adata: sc.AnnData,
                             gem_expr_key: str = 'X_gem',
                             scale_gem_expr: bool = True,
-                            layer_key: str = None):
+                            layer_key: Optional[str] = None):
     
     gem_expressions = adata.obsm[gem_expr_key]
 
@@ -31,7 +31,7 @@ def construct_gem_expressions(adata: sc.AnnData,
             scale_factor = adata.layers[layer_key].copy().sum(1).mean()
 
         else:
-            scale_factor = np.exp(adata.X.toarray() - 1).sum(1).mean()
+            scale_factor = np.expm1(adata.X).sum(1).mean()
 
         adata_gem.X *= scale_factor
         sc.pp.log1p(adata_gem)
@@ -712,18 +712,19 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
 
     inflow_interactions = []
     inflow_expressions = np.zeros((adata.n_obs, len(inflow_vars)))
-    for i, inflow_var in inflow_vars:
+    for i, inflow_var in enumerate(inflow_vars):
         lig = inflow_var.strip('inflow-')
-        inferred_interactions = [pair.strip('r-') for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
+        inferred_interactions = [pair.replace('r-', '') for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
         inflow_interactions.append('/'.join(sorted(inferred_interactions)))
 
         # We sum the total received signal across each interaction at each spot
         for inter in inferred_interactions:
-            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver'][inter]
+            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver']['r-' + inter]
 
     adata_inflow = sc.AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = ''
+    adata_inflow.var['type'] = 'inflow' 
     adata_inflow.var['interactions'] = inflow_interactions
 
     return adata_inflow, inflow_vars
@@ -750,7 +751,7 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
     adata_outflow = sc.AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = ''
-    adata_outflow.var['type'] = 'outflow' # Define variable types
+    adata_outflow.var['type'] = 'outflow' 
     adata_outflow.var['interactions'] = outflow_interactions
 
     return adata_outflow, outflow_vars

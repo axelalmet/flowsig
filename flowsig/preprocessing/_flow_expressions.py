@@ -129,7 +129,8 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         downstream_tfs = []
         
         # Go through each category
-        possible_downstream_tfs = relevant_interactions['Receptor-TF-combined'].dropna().tolist()
+        possible_downstream_tfs = relevant_interactions['Receptor-TF-combined'].dropna().tolist()\
+                                    +  relevant_interactions['Ligand-TF-combined'].dropna().tolist()
         
         for unit in possible_downstream_tfs:
             split_unit = unit.split('_')

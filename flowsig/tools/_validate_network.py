@@ -71,11 +71,11 @@ def filter_low_confidence_edges(adata: sc.AnnData,
 
         edge = (node_1, node_2)            
 
-        if (edge not in total_edge_weights):
-            total_edge_weights[edge] = adjacency[row_ind, col_ind]
-        else:
-            if (edge[1], edge[0]) in total_edge_weights:
+        # We either haven't recorded the edge, or we've taken the reverse edge previously
+        if (edge[1], edge[0]) in total_edge_weights:
                 total_edge_weights[(edge[1], edge[0])] += adjacency[row_ind, col_ind]
+        else:
+            total_edge_weights[edge] = adjacency[row_ind, col_ind]
 
     for arc in cpdag.arcs:
 
@@ -115,6 +115,8 @@ def filter_low_confidence_edges(adata: sc.AnnData,
             adjacency_filtered[tuple(edge)[0], tuple(edge)[1]] = adjacency[tuple(edge)[0], tuple(edge)[1]]
             adjacency_filtered[tuple(edge)[1], tuple(edge)[0]] = adjacency[tuple(edge)[1], tuple(edge)[0]]
             
+    print(adjacency_filtered)
+
     # Save the "validated" adjacency
     filtered_adjacency_key = adjacency_key + '_' + filtered_key
     adata.uns[flowsig_network_key]['network'][filtered_adjacency_key] = adjacency_filtered
@@ -245,6 +247,8 @@ def apply_biological_flow(adata: sc.AnnData,
             adjacency_validated[col_ind, row_ind] = adjacency[col_ind, row_ind]
     
     # Save the "validated" adjacency
+    print(adjacency_validated)
+
     validated_adjacency_key = adjacency_key + '_' + validated_key
     adata.uns[flowsig_network_key]['network'][validated_adjacency_key] = adjacency_validated
 
@@ -351,7 +355,7 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         if ( (node_1_type == 'module')&(node_2_type == 'inflow') ):
 
             add_edge = True
-            undirected_edge = (tuple(edge)[1], tuple(edge)[0])
+            undirected_edge = (node_2, node_1)
 
         if ( (node_1_type == 'module')&(node_2_type == 'outflow') ):
 
@@ -360,7 +364,7 @@ def construct_intercellular_flow_network(adata: sc.AnnData,
         if ( (node_1_type == 'outflow')&(node_2_type == 'module') ):
 
             add_edge = True
-            undirected_edge = (tuple(edge)[1], tuple(edge)[0])
+            undirected_edge = (node_2, node_1)
 
         if ((node_1_type == 'module')&(node_2_type == 'module')):
 

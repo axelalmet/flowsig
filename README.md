@@ -113,14 +113,13 @@ fs.pp.construct_flows_from_cellchat(adata,
 To reduce the number of variables over which we have to infer intercellular flows—and thus computation time—and to prioritise 'informative variables', we only retain inflow and outflow signals that are sufficiently _differentially flowing_ between the control and perturbed conditions. We determine differentially flowing signals using a Wilcoxon rank-sum test and retain variables only if they are below a specified adjusted p-value threshold (q-value) and above a specified log-fold-change threshold.
 
 ```
-fs.pp.determine_informative_variables(adata,  
-                                    flowsig_expr_key = 'X_flow',
-                                    flowsig_network_key = 'flowsig_network',
-                                    spatial = False,
-                                    condition_key = condition_key,
-                                    control_key =  'Ctrl',
-                                    qval_threshold = 0.05,
-                                    logfc_threshold = 0.5)
+fs.pp.determine_differentially_flowing_vars(adata,
+                                        condition_key = condition_key,
+                                        control_key = 'Ctrl',
+                                        flowsig_expr_key = 'X_flow',
+                                        flowsig_network_key = 'flowsig_network',
+                                        qval_threshold = 0.05,
+                                        logfc_threshold = 0.5)
 ```
 
 ### Learn intercellular flows

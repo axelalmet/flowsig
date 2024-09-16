@@ -89,12 +89,12 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
         # Get the DEs with respect to this contrast
         result = sc.get.rank_genes_groups_df(adata_inflow, group=cond, key=condition_key).copy()
         result["-logQ"] = -np.log(result["pvals"].astype("float"))
-        lowqval_de = result.loc[(abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
+        lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(result["pvals_adj"] < qval_threshold)]
 
         lowqval_des_inflow[cond] = lowqval_de['names'].tolist()
         
     diff_inflow_vars = list(set.union(*map(set, [lowqval_des_inflow[cond] for cond in lowqval_des_inflow])))
-
+    
     # Calculate differentially inflowing vars
     adata_outflow.uns['log1p'] = {'base':None} # Just in case
     sc.tl.rank_genes_groups(adata_outflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
@@ -108,7 +108,7 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
         # Get the DEs with respect to this contrast
         result = sc.get.rank_genes_groups_df(adata_outflow, group=cond, key=condition_key).copy()
         result["-logQ"] = -np.log(result["pvals"].astype("float"))
-        lowqval_de = result.loc[(abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
+        lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
 
         lowqval_des_outflow[cond] = lowqval_de['names'].tolist()
         

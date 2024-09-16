@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import networkx as nx
 from scipy.sparse import issparse
 import numpy as np
@@ -218,8 +218,8 @@ def learn_intercellular_flows(adata: ad.AnnData,
                         control_key: str = None, 
                         flowsig_key: str = 'flowsig_network',
                         flow_expr_key: str = 'X_flow',
-                        use_spatial: bool = False,
-                        block_key: bool = None,
+                        use_spatial: Optional[bool] = False,
+                        block_key: Optional[bool] = None,
                         n_jobs: int = 1,
                         n_bootstraps: int = 100,
                         alpha_ci: float = 1e-3,

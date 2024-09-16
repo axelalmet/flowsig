@@ -6,7 +6,7 @@ adata = sc.read('data/burkhardt21_merged.h5ad')
 condition_key = 'Condition'
 
 # We construct 10 gene expression modules using the raw cell count.
-fs.construct_gems_using_pyliger(adata,
+fs.pp.construct_gems_using_pyliger(adata,
                                 n_gems = 10,
                                 layer_key = 'counts',
                                 condition_key = condition_key)
@@ -20,7 +20,7 @@ adata.uns[cellchat_output_key] = {'Ctrl': cellchat_Ctrl,
                                   'IFNg': cellchat_IFNg}
 
 # We first construct the potential cellular flows from the cellchat output
-fs.construct_flows_from_cellchat(adata,
+fs.pp.construct_flows_from_cellchat(adata,
                                 cellchat_output_key,
                                 gem_expr_key = 'X_gem',
                                 scale_gem_expr = True,
@@ -29,7 +29,7 @@ fs.construct_flows_from_cellchat(adata,
                                 flowsig_expr_key = 'X_flow')
 
 # Then we subset for "differentially flowing" variables
-fs.determine_informative_variables(adata,  
+fs.pp.determine_informative_variables(adata,  
                                     flowsig_expr_key = 'X_flow',
                                     flowsig_network_key = 'flowsig_network',
                                     spatial = False,
@@ -38,7 +38,7 @@ fs.determine_informative_variables(adata,
                                     logfc_threshold = 0.5)
 
 # Now we are ready to learn the network
-fs.learn_intercellular_flows(adata,
+fs.tl.learn_intercellular_flows(adata,
                         condition_key = condition_key,
                         control_key = 'Ctrl', 
                         flowsig_key = 'flowsig_network',
@@ -49,14 +49,14 @@ fs.learn_intercellular_flows(adata,
 
 # Now we do post-learning validation to reorient the network and remove low-quality edges.
 # This part is key for reducing false positives
-fs.apply_biological_flow(adata,
+fs.tl.apply_biological_flow(adata,
                         flowsig_network_key = 'flowsig_network',
                         adjacency_key = 'adjacency',
                         validated_adjacency_key = 'adjacency_validated')
 
 edge_threshold = 0.7
 
-fs.filter_low_confidence_edges(adata,
+fs.tl.filter_low_confidence_edges(adata,
                                 edge_threshold = edge_threshold,
                                 flowsig_network_key = 'flowsig_network',
                                 adjacency_key = 'adjacency',

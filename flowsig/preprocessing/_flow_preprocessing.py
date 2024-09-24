@@ -17,7 +17,7 @@ def subset_for_flow_type(adata: sc.AnnData,
     X_flow = adata.obsm[flowsig_expr_key]
     adata_subset = sc.AnnData(X=X_flow)
     adata_subset.obs = adata.obs
-    adata_subset.var = adata.uns[flowsig_network_key]['flow_var_info']
+    adata_subset.var = pd.DataFrame(adata.uns[flowsig_network_key]['flow_var_info'])
 
     if var_type != 'all':
 
@@ -45,10 +45,11 @@ def filter_flow_vars(adata: sc.AnnData,
 
     # Store the new FlowSig variable information
     flowsig_info = {'flow_var_info': flow_var_info}
+    flowsig_orig_info = {'flow_var_info': flow_var_info_orig}
 
     adata.obsm[flowsig_expr_key + '_orig'] = X_flow_orig
     adata.obsm[flowsig_expr_key] = X_flow
-    adata.uns[flowsig_network_key + '_orig'] = flow_var_info_orig
+    adata.uns[flowsig_network_key + '_orig'] = flowsig_orig_info
     adata.uns[flowsig_network_key] = flowsig_info
 
 

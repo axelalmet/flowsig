@@ -177,9 +177,9 @@ def determine_spatially_flowing_vars(adata: sc.AnnData,
 
             # Re-adjust the flow variables
             filter_flow_vars(adata,
-                             spatially_flowing_vars,
-                             flowsig_expr_key,
-                             flowsig_network_key)
+                             vars_subset = spatially_flowing_vars,
+                             flowsig_expr_key = flowsig_expr_key,
+                             flowsig_network_key = flowsig_network_key)
 
 def determine_informative_variables(adata: sc.AnnData,  
                                     flowsig_expr_key: str = 'X_flow',

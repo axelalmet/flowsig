@@ -1,7 +1,31 @@
 Metadata-Version: 2.1
 Name: flowsig
-Version: 0.1.0
-Summary: Use graphical modeling to infer communication-driven intercellular flows from single-cell RNA-sequencing and spatial transcriptomics data.
+Version: 0.1.2
+Summary: Uses graphical modeling to infer communication-driven intercellular flows from single-cell RNA-sequencing and spatial transcriptomics data.
 Home-page: https://github.com/axelalmet/flowsig
 Author: Axel A. Almet
 Author-email: axelalmet@gmail.com
+License-File: LICENSE.md
+Requires-Dist: anndata
+Requires-Dist: bokeh
+Requires-Dist: causaldag
+Requires-Dist: colorcet
+Requires-Dist: datashader
+Requires-Dist: dill
+Requires-Dist: graphical_models
+Requires-Dist: holoviews
+Requires-Dist: joblib
+Requires-Dist: matplotlib
+Requires-Dist: networkx
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: pyliger
+Requires-Dist: scanpy
+Requires-Dist: scikit-image
+Requires-Dist: scikit_learn
+Requires-Dist: scipy
+Requires-Dist: setuptools
+Requires-Dist: squidpy
+Requires-Dist: tensorflow
+Requires-Dist: tensorflow_probability
+Requires-Dist: wheel

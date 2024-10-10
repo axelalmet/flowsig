@@ -52,14 +52,14 @@ fs.tl.learn_intercellular_flows(adata,
 fs.tl.apply_biological_flow(adata,
                         flowsig_network_key = 'flowsig_network',
                         adjacency_key = 'adjacency',
-                        validated_adjacency_key = 'adjacency_validated')
+                        validated_adjacency_key = 'validated')
 
 edge_threshold = 0.7
 
 fs.tl.filter_low_confidence_edges(adata,
                                 edge_threshold = edge_threshold,
                                 flowsig_network_key = 'flowsig_network',
-                                adjacency_key = 'adjacency',
-                                filtered_adjacency_key = 'adjacency_filtered')
+                                adjacency_key = 'adjacency_validated',
+                                filtered_adjacency_key = 'filtered')
 
 adata.write('data/burkhardt21_merged.h5ad', compression='gzip')

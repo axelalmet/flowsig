@@ -247,8 +247,6 @@ def apply_biological_flow(adata: sc.AnnData,
             adjacency_validated[col_ind, row_ind] = adjacency[col_ind, row_ind]
     
     # Save the "validated" adjacency
-    print(adjacency_validated)
-
     validated_adjacency_key = adjacency_key + '_' + validated_key
     adata.uns[flowsig_network_key]['network'][validated_adjacency_key] = adjacency_validated
 

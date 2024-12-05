@@ -191,7 +191,7 @@ def plot_intercellular_flows(adata: sc.AnnData,
                     if inflow not in inflow_vars:
                         inflow_vars.append(inflow)
 
-    elif var_types_used.sum(2) == 2:
+    elif var_types_used.sum() == 2:
 
         # We just extract the outflows connected to the module vars
         if inflows_used and modules_used:

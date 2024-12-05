@@ -1,2 +1,23 @@
+[project]
+name = "FlowSig"
+version = "0.1.2"
+authors = [
+  { name="Axel A. Almet", email="axelalmet@gmail.com" },
+]
+description = "Python package to infer directed intercellular flows described by ligand-receptor interactions driving tissue-scale gene expression patterning."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/axelalmet/flowsig"
+Issues = "https://github.com/axelalmet/flowsig/issues"
+
+
 [build-system]
 requires = ["setuptools", "wheel"]
+

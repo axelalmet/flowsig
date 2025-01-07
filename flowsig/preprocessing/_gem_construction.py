@@ -21,10 +21,10 @@ def construct_gems_using_pyliger(adata: sc.AnnData,
     ad.obs.index.name = 'index'
     ad.var.index.name = 'index'
 
-    # Create LIGER object
+    # Create LIGER objec    t
     adata_list = []
     for cond in conditions:
-        adata_cond =  adata[adata.obs[condition_key] == cond].copy()
+        adata_cond =  ad[ad.obs[condition_key] == cond].copy()
         adata_cond.uns['sample_name'] = cond
         adata_list.append(adata_cond)
 

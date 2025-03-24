@@ -62,4 +62,4 @@ fs.tl.filter_low_confidence_edges(adata,
                                 adjacency_key = 'adjacency_validated',
                                 filtered_key = 'filtered')
 
-adata.write('data/burkhardt21_merged.h5ad', compression='gzip')
+# adata.write('data/burkhardt21_merged.h5ad', compression='gzip')

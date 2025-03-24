@@ -1,36 +1,34 @@
 [project]
-name = "FlowSig"
-version = "0.1.2"
+name = "flowsig"
+version = "0.1.3"
+description = "A package to infer dependent intercellular communication from single-cell and spatial transcriptomics data."
 authors = [
-  { name="Axel A. Almet", email="axelalmet@gmail.com" },
+    {name = "Axel A. Almet"}
 ]
-description = "Python package to infer directed intercellular flows described by ligand-receptor interactions driving tissue-scale gene expression patterning."
+license = {text = "MIT License"}
 readme = "README.md"
-requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "scanpy (>=1.11.0,<2.0.0)",
+    "squidpy (>=1.6.5,<2.0.0)",
+    "numpy (>=1.2.4,<2.0.0)",
+    "scipy (>=1.15.2,<2.0.0)",
+    "causaldag (>=0.1a163,<0.2)",
+    "anndata (>=0.11.3,<0.12.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "networkx (>=3.4.2,<4.0.0)",
+    "pyliger (>=0.2.4,<0.3.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "matplotlib (>=3.10.1,<4.0.0)",
+    "joblib (>=1.4.2,<2.0.0)",
+    "graphical-models (>=0.1a21,<0.2)",
+    "tensorflow-probability (>=0.25.0,<0.26.0)",
+    "tensorflow (>=2.19.0,<3.0.0)",
+    "tf-keras (>=2.19.0,<3.0.0)",
+    "spatial-factorization @ git+https://github.com/willtownes/spatial-factorization-py.git"
 ]
-dependencies = ['numpy',
-              'scipy',
-              'anndata',
-              'pandas',
-              'scanpy',
-              'spatial-factorization @ git+https://github.com/willtownes/spatial-factorization-py.git@c7c7fbb22a7ed9abccca94b759e4601b78d874b',
-              'matplotlib',
-              'seaborn',
-              'networkx',
-              'causaldag',
-              'graphical_models',
-              'joblib',
-              'squidpy']
-
-[project.urls]
-Homepage = "https://github.com/axelalmet/flowsig"
-Issues = "https://github.com/axelalmet/flowsig/issues"
 
 
 [build-system]
-requires = ["setuptools", "wheel"]
-
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

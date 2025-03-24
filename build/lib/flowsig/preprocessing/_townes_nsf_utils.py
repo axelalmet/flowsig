@@ -6,6 +6,8 @@ from tensorflow.data import Dataset
 from sklearn.cluster import KMeans
 from copy import deepcopy
 
+# All of this functionaliy has been taken from https://github.com/willtownes/nsf-paper/blob/main/utils/preprocess.py
+# and https://github.com/willtownes/nsf-paper/blob/main/utils/postprocess.py
 def rescale_spatial_coords(X,box_side=4):
   """
   X is an NxD matrix of spatial coordinates

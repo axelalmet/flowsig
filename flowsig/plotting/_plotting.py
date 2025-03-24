@@ -12,7 +12,11 @@ palette_network = list(sns.color_palette("tab20") \
                        + sns.color_palette("tab20b") \
                        + sns.color_palette("tab20c")\
                        + sns.color_palette("Set1")\
-                       + sns.color_palette("Set2"))
+                       + sns.color_palette("Set2")\
+                       + sns.color_palette('Set3')\
+                       + sns.color_palette('Dark2')\
+                       + sns.color_palette('Pastel1')\
+                       + sns.color_palette('Pastel2'))
 
 def subset_for_flow_type(adata: sc.AnnData,
                          var_type: str = 'all',
@@ -41,7 +45,7 @@ def label_point(x, y, val, ax):
 
     for i, point in a.iterrows():
 
-        ax.text(point['x']+0.3, point['y'] + 0.1, str(point['val']), fontdict={'size':12.0})
+        ax.text(point['x']+0.1, point['y'] + 0.05, str(point['val']), fontdict={'size':12.0})
 
 
 def plot_differentially_flowing_signals(adata: sc.AnnData,
@@ -68,7 +72,8 @@ def plot_differentially_flowing_signals(adata: sc.AnnData,
         sc.tl.rank_genes_groups(adata_subset, key_added=condition_key, groupby=condition_key, method='wilcoxon')
 
     result = sc.get.rank_genes_groups_df(adata_subset, group=pert_key, key=condition_key).copy()
-    result["-logQ"] = -np.log(result["pvals_adj"].astype("float"))
+    # result["-logQ"] = -np.log(result["pvals_adj"].astype("float"))
+    result["-logP"] = -np.log(result["pvals"].astype("float"))
 
     lowqval_de = result.loc[(abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
     other_de = result.loc[(abs(result["logfoldchanges"]) <= logfc_threshold)|(abs(result["pvals_adj"]) >= qval_threshold)]
@@ -78,24 +83,34 @@ def plot_differentially_flowing_signals(adata: sc.AnnData,
 
     sns.regplot(
         x=other_de["logfoldchanges"],
-        y=other_de["-logQ"],
+        y=other_de["-logP"],
         fit_reg=False,
         scatter_kws={"s": scatter_size},
         ax=ax
     )
     sns.regplot(
         x=lowqval_de["logfoldchanges"],
-        y=lowqval_de["-logQ"],
+        y=lowqval_de["-logP"],
         fit_reg=False,
         scatter_kws={"s": scatter_size},
         ax=ax
     )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_linewidth(1.0)
+    ax.spines['bottom'].set_linewidth(1.0)
+
+    # Plot where the thresholds are
+    ax.axhline(-np.log(qval_threshold), color='grey', alpha=0.5, linestyle='--')
+    ax.axvline(-logfc_threshold, color='grey', alpha=0.5, linestyle='--')
+    ax.axvline(logfc_threshold, color='grey', alpha=0.5, linestyle='--')
+
     ax.set_xlabel("log2 FC")
-    ax.set_ylabel("-log Q-value")
+    ax.set_ylabel("-log p-value")
 
     if label_lowqval:
         label_point(lowqval_de['logfoldchanges'],
-                    lowqval_de['-logQ'],
+                    lowqval_de['-logP'],
                     lowqval_de['names'],
                     plt.gca())  
             
@@ -209,8 +224,8 @@ def plot_intercellular_flows(adata: sc.AnnData,
 
     # We will sort the inflow vars etc now
     inflow_vars = sorted(inflow_vars)
-    # module_vars = sorted(module_vars, key=lambda x: int(x[4:])) # Assumption is that all module vars are written like 'GEM-1', etc.
-    module_vars = sorted(module_vars) # Assumption is that all module vars are written like 'GEM-1', etc.
+    module_vars = sorted(module_vars, key=lambda x: int(x[4:])) # Assumption is that all module vars are written like 'GEM-1', etc.
+    # module_vars = sorted(module_vars) # Assumption is that all module vars are written like 'GEM-1', etc.
 
     outflow_vars = sorted(outflow_vars)
     resultant_pattern_graph = flow_network.subgraph(inflow_vars + module_vars + outflow_vars)
@@ -288,7 +303,9 @@ def plot_intercellular_flows(adata: sc.AnnData,
     if ax is None:
         fig, ax = plt.subplots()
     nx.draw_networkx_edges(resultant_pattern_graph, resultant_pattern_graph_pos, edge_color=resultant_pattern_graph_edge_colours, width=edge_widths, alpha=0.75, connectionstyle="arc3,rad=0.2", ax=ax)
-    nx.draw_networkx_labels(resultant_pattern_graph, resultant_pattern_graph_pos, font_size=14, font_family='Arial', ax=ax);
+    labels = nx.draw_networkx_labels(resultant_pattern_graph, resultant_pattern_graph_pos, font_size=14, font_family='Arial', ax=ax, horizontalalignment='center');
+    for text in labels.values():
+        text.set_rotation(90)
     nx.draw_networkx_nodes(resultant_pattern_graph, resultant_pattern_graph_pos, nodelist=inflow_vars, node_color=[node_colours[node] for node in inflow_vars], linewidths=1.0, edgecolors='black', node_size=500, ax=ax)
     nx.draw_networkx_nodes(resultant_pattern_graph, resultant_pattern_graph_pos, nodelist=module_vars, node_color=[node_colours[node] for node in module_vars], node_shape='v', node_size=100, ax=ax)
     nx.draw_networkx_nodes(resultant_pattern_graph, resultant_pattern_graph_pos, nodelist=outflow_vars, node_color=[node_colours[node] for node in outflow_vars], node_shape='s', node_size=100, ax=ax)

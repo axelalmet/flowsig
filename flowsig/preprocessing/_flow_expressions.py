@@ -40,7 +40,8 @@ def construct_gem_expressions(adata: sc.AnnData,
 
 def construct_inflow_signals_cellchat(adata: sc.AnnData,
                                     cellchat_output_key: str, 
-                                    model_organism: str = 'human'):
+                                    model_organism: str = 'human',
+                                    tfs_to_use: Optional[List[str]] = None):
     
     model_organisms = ['human', 'mouse']
 
@@ -48,7 +49,7 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
     
     data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-    data_path = os.path.join(data_dir, 'cellchat_interactions_and_tfs_' + model_organism + '.csv')
+    data_path = os.path.join(data_dir, 'cellchat_interactions_tfs_' + model_organism + '.csv.gz')
 
     cellchat_interactions_and_tfs = pd.read_csv(data_path, index_col=0)
 
@@ -68,7 +69,7 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         
         for i, rec in enumerate(receptor_split):
             if rec not in adata.var_names:
-                receptor_v2_split = ccc_output_merged[ccc_output_merged['interaction_name_2'] == interaction]['receptor'].unique()[0].split('_')
+                receptor_v2_split = cellchat_interactions_and_tfs[cellchat_interactions_and_tfs['interaction_name_2'] == interaction]['receptor.symbol'].unique()[0].split(', ')
                 
                 receptors.append(receptor_v2_split[i])
             else:
@@ -139,6 +140,9 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
                     downstream_tfs.append(tf)
                     
         downstream_tfs = np.intersect1d(downstream_tfs, adata.var_names)
+
+        if tfs_to_use is not None:
+            downstream_tfs = np.intersect1d(downstream_tfs, tfs_to_use)
         
         unique_inflow_vars_and_tfs[receptor] = sorted(list(downstream_tfs))
         
@@ -232,7 +236,8 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
                                 cellchat_output_key: str,
                                 gem_expr_key: str = 'X_gem',
                                 scale_gem_expr: bool = True,
-                                model_organism: str= 'mouse',
+                                model_organism: str = 'mouse',
+                                tfs_to_use: Optional[List[str]] = None,
                                 flowsig_network_key: str = 'flowsig_network',
                                 flowsig_expr_key: str = 'X_flow'):
 
@@ -240,7 +245,7 @@ def construct_flows_from_cellchat(adata: sc.AnnData,
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_cellchat(adata, cellchat_output_key)
 
-    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism)
+    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism, tfs_to_use)
 
     adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
 

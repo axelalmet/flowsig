@@ -28,15 +28,8 @@ source flowsigenv/bin/activate
 git clone https://github.com/axelalmet/flowsig.git
 cd ./flowsig/
 
-# Install using the setup.cfg
+# Install
 pip3 install .
-```
-
-
-You will need to install NSF to infer spatial GEMS separately (see [here](https://github.com/willtownes/spatial-factorization-py))
-```
-pip3 install git+https://github.com/willtownes/spatial-factorization-py.git#egg=spatial-factorization
-
 ```
 </details>
 <details>

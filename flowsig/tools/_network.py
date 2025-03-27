@@ -360,8 +360,9 @@ def learn_intercellular_flows(adata: ad.AnnData,
                 alpha_ci,
                 alpha_inv,
                 boot) for boot in range(n_bootstraps)]
-                                
-        bootstrap_results = Parallel(n_jobs=n_jobs)(delayed(run_utigsp)(*arg) for arg in args)
+
+        with tqdm_joblib(tqdm(desc='Inferring intercellular flows', total=n_bootstraps)) as progress_bar:
+            bootstrap_results = Parallel(n_jobs=n_jobs)(delayed(run_utigsp)(*arg) for arg in args)
 
         end = timer()
 
@@ -418,7 +419,6 @@ def learn_intercellular_flows(adata: ad.AnnData,
                 alpha_ci,
                 boot) for boot in range(n_bootstraps)]
                             
-
 
         with tqdm_joblib(tqdm(desc='Inferring intercellular flows', total=n_bootstraps)) as progress_bar:
             bootstrap_results = Parallel(n_jobs=n_jobs)(delayed(run_gsp)(*arg) for arg in args)

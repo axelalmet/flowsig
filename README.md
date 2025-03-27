@@ -116,6 +116,23 @@ fs.pp.ddetermine_informative_variables(adata,
                                     logfc_threshold: float = 0.5)
 ```
 
+If you wanted to visualise which variables remained, e.g., which are differentially outflowing, you can run the following code:
+```
+fig, ax = plt.subplots(figsize=(6, 4))
+fs.pl.plot_differentially_flowing_signals(adata,
+                                        condition_key = 'Condition',
+                                        pert_key = 'IFNg',
+                                        var_type = 'outflow',
+                                        flowsig_expr_key = 'X_flow_orig',
+                                        flowsig_network_key = 'flowsig_network_orig',
+                                        qval_threshold = 0.05,
+                                        logfc_threshold = 0.5,
+                                        label_lowqval = True,
+                                        ax=ax
+                                        )
+plt.show()
+```
+Setting pert_key='IFNg orients results so that those upregulated in the perturbed condition have positive log fold change. Note also that you also need to set `flowsig_expr_key = 'X_flow_orig'` and `flowsig_network_key = 'flowsig_network_orig'` to visualise both significant and non-significant variables.
 ### Learn intercellular flows
 
 We are now in a position to learn the intercellular flows. To increase reliability of objects, we bootstrap aggregate results over a number of realisations. For non-spatial data, we have to specify the condition label and the control condition.
@@ -165,6 +182,37 @@ flow_network = fs.tl.construct_intercellular_flow_network(adata,
                                                         flowsig_network_key = 'flowsig_network',
                                                         adjacency_key = 'adjacency_validated_filtered')
 ```
+
+### Visualise the intercellular flow network
+To plot the entire intercellular flow network, having obtained `flow_network` from `fs.tl.construct_intercellular_flow_network`, you can run something like:
+
+```
+fig, ax = plt.subplots(figsize=(6, 4))
+fs.pl.plot_intercellular_flows(adata,
+                                flow_network = flow_network,
+                                flowsig_network_key = 'flowsig_network',
+                                align_mode = 'horizontal',
+                                width_scale = 2.0,
+                                x_margin_offset = 0.3,
+                                y_margin_offset = 0.0,
+                                ax=ax)
+plt.show()
+```
+If you want to look at the flows induced by a specific inflow variable, you can set inflow_vars, e.g.:
+```
+fig, ax = plt.subplots(figsize=(6, 4))
+fs.pl.plot_intercellular_flows(adata,
+                                flow_network = flow_network,
+                                inflow_vars = ['SSTR2'], 
+                                flowsig_network_key = 'flowsig_network',
+                                align_mode = 'horizontal',
+                                width_scale = 2.0,
+                                x_margin_offset = 0.3,
+                                y_margin_offset = 0.0,
+                                ax=ax)
+plt.show()
+```
+
 </details>
 
 <details>

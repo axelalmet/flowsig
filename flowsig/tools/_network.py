@@ -2,7 +2,6 @@ from typing import List, Tuple, Optional
 import networkx as nx
 from scipy.sparse import issparse
 import numpy as np
-import random as rm
 from causaldag import unknown_target_igsp, gsp
 from causaldag import partial_correlation_suffstat, partial_correlation_test, MemoizedCI_Tester
 from causaldag import gauss_invariance_suffstat, gauss_invariance_test, MemoizedInvarianceTester
@@ -10,10 +9,31 @@ from graphical_models import DAG
 from sklearn.utils import safe_mask
 from timeit import default_timer as timer
 from functools import reduce
+
+import contextlib
+import joblib
+from tqdm import tqdm
 from joblib import Parallel, delayed
 import anndata as ad
 import warnings
 warnings.filterwarnings('ignore')
+
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """Context manager to patch joblib to report into tqdm progress bar given as argument."""
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=1)
+            return super().__call__(*args, **kwargs)
+
+    # Save original
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
 
 # Define the sampling step functions where we input the initial list of permutations
 def run_gsp(adata: ad.AnnData,
@@ -398,7 +418,10 @@ def learn_intercellular_flows(adata: ad.AnnData,
                 alpha_ci,
                 boot) for boot in range(n_bootstraps)]
                             
-        bootstrap_results = Parallel(n_jobs=n_jobs)(delayed(run_gsp)(*arg) for arg in args)
+
+
+        with tqdm_joblib(tqdm(desc='Inferring intercellular flows', total=n_bootstraps)) as progress_bar:
+            bootstrap_results = Parallel(n_jobs=n_jobs)(delayed(run_gsp)(*arg) for arg in args)
 
         end = timer()
 

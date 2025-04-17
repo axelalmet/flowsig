@@ -1,10 +1,11 @@
 from typing import List, Tuple, Optional
 import numpy as np
 import scanpy as sc
+from anndata import AnnData
 import squidpy as sq
 import pandas as pd
 
-def subset_for_flow_type(adata: sc.AnnData,
+def subset_for_flow_type(adata: AnnData,
                          var_type: str = 'all',
                          flowsig_expr_key: str = 'X_flow',
                          flowsig_network_key: str = 'flowsig_network'):
@@ -15,7 +16,7 @@ def subset_for_flow_type(adata: sc.AnnData,
         ValueError("Need to specify var_type as one of the following: %s"  % var_types)
 
     X_flow = adata.obsm[flowsig_expr_key]
-    adata_subset = sc.AnnData(X=X_flow)
+    adata_subset = AnnData(X=X_flow)
     adata_subset.obs = adata.obs
     adata_subset.var = pd.DataFrame(adata.uns[flowsig_network_key]['flow_var_info'])
 
@@ -25,8 +26,7 @@ def subset_for_flow_type(adata: sc.AnnData,
 
     return adata_subset
 
-
-def filter_flow_vars(adata: sc.AnnData,
+def filter_flow_vars(adata: AnnData,
                     vars_subset: List[str],
                     flowsig_expr_key: str = 'X_flow',
                     flowsig_network_key: str = 'flowsig_network'):
@@ -52,14 +52,14 @@ def filter_flow_vars(adata: sc.AnnData,
     adata.uns[flowsig_network_key + '_orig'] = flowsig_orig_info
     adata.uns[flowsig_network_key] = flowsig_info
 
-
-def determine_differentially_flowing_vars(adata: sc.AnnData,
+def determine_differentially_flowing_vars(adata: AnnData,
                                         condition_key: str,
                                         control_key: str,
                                         flowsig_expr_key: str = 'X_flow',
                                         flowsig_network_key: str = 'flowsig_network',
-                                        qval_threshold: float = 0.05,
-                                        logfc_threshold: float = 0.5):
+                                        logfc_threshold: float = 0.5,
+                                        qval_threshold: float = None,
+                                        method: str = 'v1'):
     
     # Construct AnnData for flow expression
     perturbed_conditions = [cond for cond in adata.obs[condition_key].unique().tolist() if cond != control_key]
@@ -77,43 +77,54 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
                                         flowsig_expr_key = flowsig_expr_key,
                                         flowsig_network_key = flowsig_network_key)
 
-    # Calculate differentially inflowing vars
-    adata_inflow.uns['log1p'] = {'base': None} # Just in case
-    sc.tl.rank_genes_groups(adata_inflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
-
-    # Determine the differentially flowing vars
     diff_inflow_vars = []
-
-    lowqval_des_inflow = {}
-    for cond in perturbed_conditions:
-
-        # Get the DEs with respect to this contrast
-        result = sc.get.rank_genes_groups_df(adata_inflow, group=cond, key=condition_key).copy()
-        result["-logQ"] = -np.log(result["pvals"].astype("float"))
-        lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(result["pvals_adj"] < qval_threshold)]
-
-        lowqval_des_inflow[cond] = lowqval_de['names'].tolist()
-        
-    diff_inflow_vars = list(set.union(*map(set, [lowqval_des_inflow[cond] for cond in lowqval_des_inflow])))
-    
-    # Calculate differentially inflowing vars
-    adata_outflow.uns['log1p'] = {'base':None} # Just in case
-    sc.tl.rank_genes_groups(adata_outflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
-
-    # Determine the differentially flowing vars
     diff_outflow_vars = []
 
-    lowqval_des_outflow = {}
-    for cond in perturbed_conditions:
+    if method == 'v1': # Original implementation
 
-        # Get the DEs with respect to this contrast
-        result = sc.get.rank_genes_groups_df(adata_outflow, group=cond, key=condition_key).copy()
-        result["-logQ"] = -np.log(result["pvals"].astype("float"))
-        lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
+        # Calculate differentially inflowing vars
+        adata_inflow.uns['log1p'] = {'base': None} # Just in case
+        sc.tl.rank_genes_groups(adata_inflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
 
-        lowqval_des_outflow[cond] = lowqval_de['names'].tolist()
+        # Determine the differentially flowing vars
+        diff_inflow_vars = []
+
+        lowqval_des_inflow = {}
+        for cond in perturbed_conditions:
+
+            # Get the DEs with respect to this contrast
+            result = sc.get.rank_genes_groups_df(adata_inflow, group=cond, key=condition_key).copy()
+            result["-logQ"] = -np.log(result["pvals"].astype("float"))
+            lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(result["pvals_adj"] < qval_threshold)]
+
+            lowqval_des_inflow[cond] = lowqval_de['names'].tolist()
+            
+        diff_inflow_vars = list(set.union(*map(set, [lowqval_des_inflow[cond] for cond in lowqval_des_inflow])))
         
-    diff_outflow_vars = list(set.union(*map(set, [lowqval_des_outflow[cond] for cond in lowqval_des_outflow])))
+        # Calculate differentially inflowing vars
+        adata_outflow.uns['log1p'] = {'base':None} # Just in case
+        sc.tl.rank_genes_groups(adata_outflow, key_added=condition_key, groupby=condition_key, method='wilcoxon')
+
+        # Determine the differentially flowing vars
+        diff_outflow_vars = []
+
+        lowqval_des_outflow = {}
+        for cond in perturbed_conditions:
+
+            # Get the DEs with respect to this contrast
+            result = sc.get.rank_genes_groups_df(adata_outflow, group=cond, key=condition_key).copy()
+            result["-logQ"] = -np.log(result["pvals"].astype("float"))
+            lowqval_de = result.loc[(np.abs(result["logfoldchanges"]) > logfc_threshold)&(abs(result["pvals_adj"]) < qval_threshold)]
+
+            lowqval_des_outflow[cond] = lowqval_de['names'].tolist()
+            
+        diff_outflow_vars = list(set.union(*map(set, [lowqval_des_outflow[cond] for cond in lowqval_des_outflow])))
+
+    # else:
+
+        # Calculate log fold change based on how scran calculates marker gene scores:
+        # https://rdrr.io/github/MarioniLab/scran/man/scoreMarkers.html
+
 
     # We don't change GEM vars because from experience, they typically incorporate condition-specific changes as is
     gem_vars = flow_var_info[flow_var_info['Type'] == 'module'].index.tolist()
@@ -124,7 +135,7 @@ def determine_differentially_flowing_vars(adata: sc.AnnData,
                     flowsig_expr_key,
                     flowsig_network_key)
     
-def determine_spatially_flowing_vars(adata: sc.AnnData,
+def determine_spatially_flowing_vars(adata: AnnData,
                                     flowsig_expr_key: str = 'X_flow',
                                     flowsig_network_key: str = 'flowsig_network',
                                     moran_threshold: float = 0.1,
@@ -181,7 +192,7 @@ def determine_spatially_flowing_vars(adata: sc.AnnData,
                              flowsig_expr_key = flowsig_expr_key,
                              flowsig_network_key = flowsig_network_key)
 
-def determine_informative_variables(adata: sc.AnnData,  
+def determine_informative_variables(adata: AnnData,  
                                     flowsig_expr_key: str = 'X_flow',
                                     flowsig_network_key: str = 'flowsig_network',
                                     spatial: bool = False,

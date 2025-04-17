@@ -1,12 +1,12 @@
 from typing import Optional, Dict
-import scanpy as sc
+from anndata import AnnData
 import networkx as nx
 import numpy as np
 import pandas as pd
 import graphical_models as gpm
 import networkx as nx 
 
-def filter_low_confidence_edges(adata: sc.AnnData,
+def filter_low_confidence_edges(adata: AnnData,
                                 edge_threshold: float,
                                 flowsig_network_key: str = 'flowsig_network',
                                 adjacency_key: str = 'adjacency',
@@ -121,7 +121,7 @@ def filter_low_confidence_edges(adata: sc.AnnData,
     filtered_adjacency_key = adjacency_key + '_' + filtered_key
     adata.uns[flowsig_network_key]['network'][filtered_adjacency_key] = adjacency_filtered
 
-def apply_biological_flow(adata: sc.AnnData,
+def apply_biological_flow(adata: AnnData,
                         flowsig_network_key: str = 'flowsig_network',
                         adjacency_key: str = 'adjacency',
                         validated_key: str = 'validated'):
@@ -250,7 +250,7 @@ def apply_biological_flow(adata: sc.AnnData,
     validated_adjacency_key = adjacency_key + '_' + validated_key
     adata.uns[flowsig_network_key]['network'][validated_adjacency_key] = adjacency_validated
 
-def construct_intercellular_flow_network(adata: sc.AnnData,
+def construct_intercellular_flow_network(adata: AnnData,
                         flowsig_network_key: str = 'flowsig_network',
                         adjacency_key: str = 'adjacency'):
     

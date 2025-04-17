@@ -1,6 +1,6 @@
 [project]
 name = "flowsig"
-version = "0.1.4"
+version = "0.2.0"
 description = "A package to infer dependent intercellular communication from single-cell and spatial transcriptomics data."
 authors = [
     {name = "Axel A. Almet"}
@@ -26,7 +26,8 @@ dependencies = [
     "tensorflow (>=2.19.0,<3.0.0)",
     "tf-keras (>=2.19.0,<3.0.0)",
     "spatial-factorization @ git+https://github.com/willtownes/spatial-factorization-py.git",
-    "tqdm (>=4.67.1,<5.0.0)"
+    "tqdm (>=4.67.1,<5.0.0)",
+    "cnmf (>=1.7.0,<2.0.0)"
 ]
 
 

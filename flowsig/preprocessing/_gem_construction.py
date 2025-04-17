@@ -1,5 +1,6 @@
-import scanpy as sc
+from anndata import AnnData
 import numpy as np
+import pandas as pd
 import pyliger
 from tensorflow_probability import math as tm
 tfk = tm.psd_kernels
@@ -9,7 +10,7 @@ from scipy.sparse import csr_matrix
 from ._townes_nsf_utils import *
 from sklearn.decomposition import NMF
 
-def construct_gems_using_pyliger(adata: sc.AnnData,
+def construct_gems_using_pyliger(adata: AnnData,
                                 n_gems: int,
                                 layer_key: str,
                                 condition_key: str):
@@ -56,7 +57,7 @@ def construct_gems_using_pyliger(adata: sc.AnnData,
     adata.uns['pyliger_info']['n_gems'] =  n_gems
     adata.obsm['X_gem'] = X_gem
 
-def construct_gems_using_nsf(adata: sc.AnnData,
+def construct_gems_using_nsf(adata: AnnData,
                             n_gems: int,
                             layer_key: str,
                             spatial_key: str = "spatial",
@@ -94,7 +95,7 @@ def construct_gems_using_nsf(adata: sc.AnnData,
     adata.uns['nsf_info']['n_gems'] =  n_gems
     adata.obsm['X_gem'] = insf['factors']
 
-def construct_gems_using_nmf(adata: sc.AnnData,
+def construct_gems_using_nmf(adata: AnnData,
                                 n_gems: int,
                                 layer_key: str, 
                                 random_state: int = 0,
@@ -126,3 +127,34 @@ def construct_gems_using_nmf(adata: sc.AnnData,
                              'totals':W_sum}
 
     adata.obsm['X_gem'] = W_lda
+
+def construct_gems_using_cnmf(adata: AnnData,
+                              n_gems: int, 
+                              usage_norms: np.ndarray | pd.DataFrame,
+                              spectra_scores:  np.ndarray | pd.DataFrame,
+                              spectra_tpm:  np.ndarray | pd.DataFrame,
+                              cnmf_vars: Optional[list] = None):
+
+    if isinstance(spectra_scores, np.ndarray) and cnmf_vars is None:
+        raise(ValueError("Must provide cNMF vars list if spectra_scores is a numpy array"))
+    else:
+        cnmf_vars = spectra_scores.index.tolist()
+        spectra_scores = spectra_scores.values
+        spectra_tpm = spectra_tpm.values
+        
+    cnmf_info = {'spectra_score': spectra_scores,
+                 'spectra_tpm': spectra_tpm,
+                 'n_gems': n_gems,
+                 'vars': cnmf_vars}
+
+    adata.uns['cnmf_info'] = cnmf_info
+
+    # Account for the fact that usage_norm could be a Pandas dataframe
+    if isinstance(usage_norms, pd.DataFrame):
+        usage_norms = usage_norms.values
+    elif isinstance(usage_norms, np.ndarray):
+        pass
+    else:
+        raise ValueError("usage_norms must be a NumPy array or Pandas dataframe")
+    
+    adata.obsm['X_gem'] = usage_norms

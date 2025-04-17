@@ -14,7 +14,7 @@ import contextlib
 import joblib
 from tqdm import tqdm
 from joblib import Parallel, delayed
-import anndata as ad
+from anndata import AnnData
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -36,7 +36,7 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 # Define the sampling step functions where we input the initial list of permutations
-def run_gsp(adata: ad.AnnData,
+def run_gsp(adata: AnnData,
             flowsig_expr_key: str,
             flow_vars: List[str],
             use_spatial: bool = False,
@@ -107,7 +107,7 @@ def run_gsp(adata: ad.AnnData,
     return {'nonzero_flow_vars_indices':nonzero_flow_vars_indices,
             'adjacency_cpdag':adjacency_cpdag}
 
-def run_utigsp(adata: ad.AnnData,
+def run_utigsp(adata: AnnData,
                 condition_key: str,
                 control_key: str,
                 flowsig_expr_key: str,
@@ -233,7 +233,7 @@ def run_utigsp(adata: ad.AnnData,
             'adjacency_cpdag':adjacency_cpdag,
             'perturbed_targets_indices':perturbed_targets_list}
 
-def learn_intercellular_flows(adata: ad.AnnData,
+def learn_intercellular_flows(adata: AnnData,
                         condition_key: str = None,
                         control_key: str = None, 
                         flowsig_key: str = 'flowsig_network',

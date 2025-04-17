@@ -1,8 +1,9 @@
 import pandas as pd
 import scanpy as sc
+from anndata import AnnData
 from sklearn.cluster import KMeans
 
-def construct_spatial_blocks(adata: sc.AnnData,
+def construct_spatial_blocks(adata: AnnData,
                              n_blocks: int,
                              use_graph: bool = False,
                              graph_adjacency: str = 'spatial_connectivities',

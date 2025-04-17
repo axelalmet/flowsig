@@ -1,13 +1,76 @@
-from typing import List, Tuple, Optional
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import List, Optional, Literal, Any, Tuple
 import numpy as np
 import scanpy as sc
+from anndata import AnnData
 import pandas as pd
 import os
+from functools import lru_cache
+import pathlib
+import logging
+logger = logging.getLogger(__name__)
 
-def construct_gem_expressions(adata: sc.AnnData,
+@dataclass(frozen=True)
+class FlowSigConfig:
+    gem_expr_key: str = 'X_gem'
+    scale_gem_expr: bool = True
+    flowsig_network_key: str = 'flowsig_network'
+    flowsig_expr_key: str = 'X_flow'
+
+@lru_cache(maxsize=2)
+def _load_cellchat_tfs(model_organism: str) -> pd.DataFrame:
+    path = pathlib.Path(__file__).with_name(
+        f'../data/cellchat_interactions_tfs_{model_organism}.csv.gz'
+    )
+    return pd.read_csv(path, index_col=0)
+
+def _safe_get(adata: AnnData, gene: str) -> Optional[np.ndarray]:
+    try:
+        return adata[:, gene].X.A1          # works for csr & csc sparse
+    except KeyError:                        # gene not in the matrix
+        return None
+    
+def _assemble_flows(
+        adata: AnnData,
+        adata_outflow: AnnData,
+        adata_inflow: AnnData,
+        adata_gem: AnnData,
+        *,
+        config: FlowSigConfig
+) -> None:
+    # horizontal concat (dense or sparse)
+    flow_expressions = np.hstack([
+        adata_outflow.X,
+        adata_inflow.X,
+        adata_gem.X
+    ])
+
+    flow_variables = (
+        adata_outflow.var_names.tolist()
+        + adata_inflow.var_names.tolist()
+        + adata_gem.var_names.tolist()
+    )
+
+    flow_var_info = pd.DataFrame({
+        'Type': adata_outflow.var['type']
+                  .append(adata_inflow.var['type'])
+                  .append(adata_gem.var['type']),
+        'Downstream_TF': adata_outflow.var['downstream_tfs']
+                           .append(adata_inflow.var['downstream_tfs'])
+                           .append(adata_gem.var['downstream_tfs']),
+        'Interaction': adata_outflow.var['interactions']
+                         .append(adata_inflow.var['interactions'])
+                         .append(adata_gem.var['interactions']),
+    }, index=pd.Index(flow_variables))
+
+    adata.obsm[config.flowsig_expr_key] = flow_expressions
+    adata.uns[config.flowsig_network_key] = {'flow_var_info': flow_var_info}
+
+def construct_gem_expressions(adata: AnnData,
                             gem_expr_key: str = 'X_gem',
                             scale_gem_expr: bool = True,
-                            layer_key: Optional[str] = None):
+                            layer_key: Optional[str] = None) -> Tuple[AnnData, List[str]]:
     
     gem_expressions = adata.obsm[gem_expr_key]
 
@@ -18,7 +81,7 @@ def construct_gem_expressions(adata: sc.AnnData,
     num_gems = gem_expressions.shape[1]
     flow_gems = ['GEM-' + str(i + 1) for i in range(num_gems)]
 
-    adata_gem = sc.AnnData(X=gem_expressions)
+    adata_gem = AnnData(X=gem_expressions)
     adata_gem.var.index = pd.Index(flow_gems)
     adata_gem.var['downstream_tfs'] = '' # For housekeeping for later
     adata_gem.var['type'] = 'module' # Define variable types
@@ -38,20 +101,18 @@ def construct_gem_expressions(adata: sc.AnnData,
 
     return adata_gem, flow_gems
 
-def construct_inflow_signals_cellchat(adata: sc.AnnData,
+def construct_inflow_signals_cellchat(adata: AnnData,
                                     cellchat_output_key: str, 
-                                    model_organism: str = 'human',
-                                    tfs_to_use: Optional[List[str]] = None):
-    
-    model_organisms = ['human', 'mouse']
+                                    model_organism: Literal['human', 'mouse'] = 'human',
+                                    tfs_to_use: Optional[List[str]] = None,
+                                    method: Literal['v1', 'v2'] = 'v1') -> Tuple[AnnData, List[str]]:
 
-    if model_organism not in model_organisms:
-        raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
-    
-    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-    data_path = os.path.join(data_dir, 'cellchat_interactions_tfs_' + model_organism + '.csv.gz')
+    vars_set = set(adata.var_names)  
 
-    cellchat_interactions_and_tfs = pd.read_csv(data_path, index_col=0)
+    cellchat_interactions_and_tfs = _load_cellchat_tfs(model_organism)
+
+    if cellchat_output_key not in adata.uns:
+        raise KeyError(f"'{cellchat_output_key}' not found in adata.uns")
 
     ccc_output_merged = pd.concat([adata.uns[cellchat_output_key][sample] for sample in adata.uns[cellchat_output_key]])
     ccc_interactions = ccc_output_merged['interaction_name_2'].unique().tolist()
@@ -68,7 +129,7 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         receptors = []
         
         for i, rec in enumerate(receptor_split):
-            if rec not in adata.var_names:
+            if rec not in vars_set:
                 receptor_v2_split = cellchat_interactions_and_tfs[cellchat_interactions_and_tfs['interaction_name_2'] == interaction]['receptor.symbol'].unique()[0].split(', ')
                 
                 receptors.append(receptor_v2_split[i])
@@ -96,11 +157,19 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         receptor_expression = np.ones((adata.n_obs, ))
         
         split_receptor = receptor.split('+')
+        exprs = [_safe_get(adata, unit) for unit in split_receptor]
+        exprs = [expr for expr in exprs if expr is not None] # Account for missing genes
+
+        # Take geometric mean
+        if exprs:                                    
+            receptor_expression = np.prod(exprs, axis=0) ** (1.0 / len(exprs))
+            inflow_expressions[:, i] = receptor_expression
+
         considered_receptors = []
         
         for unit in split_receptor:
             
-            if unit not in adata.var_names:
+            if unit not in vars_set:
                 print(unit)
                 
             else:
@@ -165,7 +234,7 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
         downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
         inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
         
-    adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
+    adata_inflow = AnnData(X=inflow_expressions_adjusted)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
     adata_inflow.var['type'] = 'inflow' # Define variable types
@@ -173,39 +242,30 @@ def construct_inflow_signals_cellchat(adata: sc.AnnData,
 
     return adata_inflow, inflow_vars
 
-def construct_outflow_signals_cellchat(adata: sc.AnnData,
+def construct_outflow_signals_cellchat(adata: AnnData,
                                     cellchat_output_key: str, 
-                                    ):
+                                    ) -> Tuple[AnnData, List[str]]:
     
     cellchat_output_merged = pd.concat([adata.uns[cellchat_output_key][sample] for sample in adata.uns[cellchat_output_key]])
     cellchat_interactions = cellchat_output_merged['interaction_name_2'].unique().tolist()
-    outflow_vars = []
     relevant_interactions = {}
 
     for inter in cellchat_interactions:
 
         ligand = inter.split(' - ')[0]
 
-        if ligand not in outflow_vars:
+        if ligand not in relevant_interactions:
 
-            add_ligand = False
+            ligand_expr = _safe_get(adata, ligand)
 
-            # Sometimes this ligand not is not the actual symbol name (CellChat errors)
-            if ligand not in adata.var_names:
-                # Get the alternative name for the ligand
+            # Check if the alternative ligand name (sometimes CellChat is inconsistent)
+            if ligand_expr is None:
+
                 ligand = cellchat_output_merged[cellchat_output_merged['interaction_name_2'] == inter]['ligand'].values[0]
 
-                if (ligand in adata.var_names)&(ligand not in outflow_vars):
-                    add_ligand = True
+                ligand_expr = _safe_get(adata, ligand)
                     
-
-            else:
-                if ligand not in outflow_vars:
-                    add_ligand = True
-
-            if add_ligand:
-                outflow_vars.append(ligand)
-
+            if ligand_expr is not None and ligand not in relevant_interactions:
                 relevant_interactions[ligand] = [inter]
 
         else:
@@ -213,12 +273,13 @@ def construct_outflow_signals_cellchat(adata: sc.AnnData,
             interactions_with_ligand.append(inter)
             relevant_interactions[ligand] = interactions_with_ligand
 
+    outflow_vars = list(relevant_interactions.keys())
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
 
     for i, signal in enumerate(outflow_vars):
         outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
 
-    adata_outflow = sc.AnnData(X=outflow_expressions)
+    adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
     adata_outflow.var['type'] = 'outflow' # Define variable types
@@ -232,63 +293,36 @@ def construct_outflow_signals_cellchat(adata: sc.AnnData,
 
     return adata_outflow, outflow_vars
 
-def construct_flows_from_cellchat(adata: sc.AnnData,
+def construct_flows_from_cellchat(adata: AnnData,
                                 cellchat_output_key: str,
-                                gem_expr_key: str = 'X_gem',
-                                scale_gem_expr: bool = True,
-                                model_organism: str = 'mouse',
+                                model_organism: Literal['human', 'mouse'] = 'human',
                                 tfs_to_use: Optional[List[str]] = None,
-                                flowsig_network_key: str = 'flowsig_network',
-                                flowsig_expr_key: str = 'X_flow'):
+                                config: FlowSigConfig = FlowSigConfig(),
+                                method: Literal['v1', 'v2'] = 'v1') -> None:
 
+    model_organisms = ['human', 'mouse']
 
+    if model_organism not in model_organisms:
+        raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
+    
+    if cellchat_output_key not in adata.uns:
+        raise KeyError(f"'{cellchat_output_key}' not found in adata.uns")
+    
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_cellchat(adata, cellchat_output_key)
 
-    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism, tfs_to_use)
+    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism, tfs_to_use, method)
 
-    adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
+    adata_gem, flow_gem_vars = construct_gem_expressions(adata, config.gem_expr_key, config.scale_gem_expr)
 
-    # Determine the flow_variables
-    flow_variables = outflow_vars + inflow_vars + flow_gem_vars
-
-    flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
-
-    for i, outflow_var in enumerate(outflow_vars):
-        flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
-
-    for i, inflow_var in enumerate(inflow_vars):
-        flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
-
-    for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
-
-    flow_variable_types = adata_outflow.var['type'].tolist() \
-                            + adata_inflow.var['type'].tolist() \
-                            + adata_gem.var['type'].tolist()
+    _assemble_flows(adata, adata_outflow, adata_inflow, adata_gem, config=config)
     
-    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
-                            + adata_inflow.var['downstream_tfs'].tolist() \
-                            + adata_gem.var['downstream_tfs'].tolist()
-    
-    flow_interactions = adata_outflow.var['interactions'].tolist() \
-                            + adata_inflow.var['interactions'].tolist() \
-                            + adata_gem.var['interactions'].tolist()
-
-    # Store the type, relevant downstream_TF, and received interactions for each variable
-    # Store all the information on the flow variables
-    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Type': flow_variable_types,
-                                      'Downstream_TF': flow_downstream_tfs,
-                                      'Interaction': flow_interactions})
-    
-    adata.obsm[flowsig_expr_key] = flow_expressions
-    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
-    
-def construct_inflow_signals_cellphonedb(adata: sc.AnnData,
+def construct_inflow_signals_cellphonedb(adata: AnnData,
                                     cellphonedb_output_key: str,
-                                    cellphonedb_active_tfs_key: str):
+                                    cellphonedb_active_tfs_key: str) -> Tuple[AnnData, List[str]]:
     
+    vars_set = set(adata.var_names)
+
     ccc_output_merged = pd.concat([adata.uns[cellphonedb_output_key][sample] for sample in adata.uns[cellphonedb_output_key]])
     cpdb_active_tfs_merged = pd.concat([adata.uns[cellphonedb_active_tfs_key][sample] for sample in adata.uns[cellphonedb_active_tfs_key]])
     ccc_interactions = ccc_output_merged['interacting_pair'].unique().tolist()
@@ -303,7 +337,7 @@ def construct_inflow_signals_cellphonedb(adata: sc.AnnData,
         receptors = ccc_output_merged[ccc_output_merged['interacting_pair'] == interaction]['gene_b'].dropna().unique().tolist()
         
         for receptor in receptors:
-            if receptor in adata.var_names:
+            if receptor in vars_set:
                 if receptor not in unique_inflow_vars_and_interactions:
                     unique_inflow_vars_and_interactions[receptor] = [interaction]
                     
@@ -361,7 +395,7 @@ def construct_inflow_signals_cellphonedb(adata: sc.AnnData,
         downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
         inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
         
-    adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
+    adata_inflow = AnnData(X=inflow_expressions_adjusted)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
     adata_inflow.var['type'] = 'inflow' # Define variable types
@@ -369,9 +403,11 @@ def construct_inflow_signals_cellphonedb(adata: sc.AnnData,
 
     return adata_inflow, inflow_vars
 
-def construct_outflow_signals_cellphonedb(adata: sc.AnnData,
-                                    cellphonedb_output_key: str):
-    
+def construct_outflow_signals_cellphonedb(adata: AnnData,
+                                    cellphonedb_output_key: str) -> Tuple[AnnData, List[str]]:
+
+    vars_set = set(adata.var_names)
+
     cellphonedb_output_merged = pd.concat([adata.uns[cellphonedb_output_key][sample] for sample in adata.uns[cellphonedb_output_key]])
     cellphonedb_interactions = cellphonedb_output_merged['interacting_pair'].unique().tolist()
     outflow_vars = []
@@ -382,8 +418,7 @@ def construct_outflow_signals_cellphonedb(adata: sc.AnnData,
         ligands = cellphonedb_output_merged[cellphonedb_output_merged['interacting_pair'] == inter]['gene_a'].dropna().unique().tolist()
 
         for ligand in ligands:
-            if (ligand in adata.var_names):
-
+            if (ligand in vars_set):
 
                 if (ligand not in outflow_vars):
                     outflow_vars.append(ligand)
@@ -400,7 +435,7 @@ def construct_outflow_signals_cellphonedb(adata: sc.AnnData,
     for i, signal in enumerate(outflow_vars):
         outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
 
-    adata_outflow = sc.AnnData(X=outflow_expressions)
+    adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
     adata_outflow.var['type'] = 'outflow' # Define variable types
@@ -414,77 +449,45 @@ def construct_outflow_signals_cellphonedb(adata: sc.AnnData,
 
     return adata_outflow, outflow_vars
 
-def construct_flows_from_cellphonedb(adata: sc.AnnData,
+def construct_flows_from_cellphonedb(adata: AnnData,
                                 cellphonedb_output_key: str,
                                 cellphonedb_tfs_key: str,
-                                gem_expr_key: str = 'X_gem',
-                                scale_gem_expr: bool = True,
                                 model_organism: str = 'human',
-                                flowsig_network_key: str = 'flowsig_network',
-                                flowsig_expr_key: str = 'X_flow'):
+                                config: FlowSigConfig = FlowSigConfig()):
 
     if model_organism != 'human':
         ValueError("CellPhoneDB only supports human data.")
+
+    if cellphonedb_output_key not in adata.uns:
+        raise KeyError(f"'{cellphonedb_output_key}' not found in adata.uns")
+    
+    if cellphonedb_tfs_key not in adata.uns:
+        raise KeyError(f"'{cellphonedb_tfs_key}' not found in adata.uns")   
 
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_cellphonedb(adata, cellphonedb_output_key)
 
     adata_inflow, inflow_vars = construct_inflow_signals_cellphonedb(adata, cellphonedb_output_key, cellphonedb_tfs_key)
 
-    adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
+    adata_gem, flow_gem_vars = construct_gem_expressions(adata, config.gem_expr_key, config.scale_gem_expr)
 
-    # Determine the flow_variables
-    flow_variables = outflow_vars + inflow_vars + flow_gem_vars
-
-    flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
-
-    for i, outflow_var in enumerate(outflow_vars):
-        flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
-
-    for i, inflow_var in enumerate(inflow_vars):
-        flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
-
-    for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
-
-    flow_variable_types = adata_outflow.var['type'].tolist() \
-                            + adata_inflow.var['type'].tolist() \
-                            + adata_gem.var['type'].tolist()
+    _assemble_flows(adata, adata_outflow, adata_inflow, adata_gem, config=config)
     
-    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
-                            + adata_inflow.var['downstream_tfs'].tolist() \
-                            + adata_gem.var['downstream_tfs'].tolist()
-    
-    flow_interactions = adata_outflow.var['interactions'].tolist() \
-                            + adata_inflow.var['interactions'].tolist() \
-                            + adata_gem.var['interactions'].tolist()
-
-    # Store the type, relevant downstream_TF, and received interactions for each variable
-    # Store all the information on the flow variables
-    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Type': flow_variable_types,
-                                      'Downstream_TF': flow_downstream_tfs,
-                                      'Interaction': flow_interactions})
-    
-    adata.obsm[flowsig_expr_key] = flow_expressions
-    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
-    
-def construct_inflow_signals_liana(adata: sc.AnnData,
+def construct_inflow_signals_liana(adata: AnnData,
                                     liana_output_key: str, 
                                     use_tfs: bool = False,
-                                    model_organism: str = 'human'):
+                                    model_organism: Literal['human', 'mouse'] = 'human') -> Tuple[AnnData, List[str]]:
     
     model_organisms = ['human', 'mouse']
 
     if model_organism not in model_organisms:
         raise ValueError ("Invalid model organism. Please select one of: %s" % model_organisms)
+
+    vars_set = set(adata.var_names)
     
     if use_tfs:
-    
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-        data_path = os.path.join(data_dir, 'cellchat_interactions_and_tfs_' + model_organism + '.csv')
 
-        cellchat_interactions_and_tfs = pd.read_csv(data_path, index_col=0)
+        cellchat_interactions_and_tfs = _load_cellchat_tfs(model_organism)
 
         ccc_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
         inflow_vars = sorted(ccc_output_merged['receptor_complex'].unique().tolist())
@@ -524,7 +527,7 @@ def construct_inflow_signals_liana(adata: sc.AnnData,
             
             for unit in split_receptor:
                 
-                if unit not in adata.var_names:
+                if unit not in vars_set:
                     print(unit)
                     
                 else:
@@ -585,7 +588,7 @@ def construct_inflow_signals_liana(adata: sc.AnnData,
             downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
             inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
             
-        adata_inflow = sc.AnnData(X=inflow_expressions_adjusted)
+        adata_inflow = AnnData(X=inflow_expressions_adjusted)
         adata_inflow.var.index = pd.Index(inflow_vars)
         adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
         adata_inflow.var['type'] = 'inflow' # Define variable types
@@ -593,9 +596,11 @@ def construct_inflow_signals_liana(adata: sc.AnnData,
 
         return adata_inflow, inflow_vars
     
-def construct_outflow_signals_liana(adata: sc.AnnData,
+def construct_outflow_signals_liana(adata: AnnData,
                                     liana_output_key: str, 
-                                    ):
+                                    ) -> Tuple[AnnData, List[str]]:
+    vars_set = set(adata.var_names)
+
     liana_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
    
     outflow_vars = sorted(liana_output_merged['ligand_complex'].unique().tolist())
@@ -629,8 +634,8 @@ def construct_outflow_signals_liana(adata: sc.AnnData,
         
         for unit in split_ligand:
             
-            if unit not in adata.var_names:
-                print(unit)
+            if unit not in vars_set:
+                logger.debug("Gene %s not present in var_names", unit)
                 
             else:
                 
@@ -642,7 +647,7 @@ def construct_outflow_signals_liana(adata: sc.AnnData,
         if len(considered_ligands) != 0:
             outflow_expressions[:, i] = ligand_expression**(1.0 / len(considered_ligands))
 
-    adata_outflow = sc.AnnData(X=outflow_expressions)
+    adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
     adata_outflow.var['type'] = 'outflow' # Define variable types
@@ -656,60 +661,26 @@ def construct_outflow_signals_liana(adata: sc.AnnData,
 
     return adata_outflow, outflow_vars
    
-def construct_flows_from_liana(adata: sc.AnnData,
+def construct_flows_from_liana(adata: AnnData,
                                 liana_output_key: str,
-                                gem_expr_key: str = 'X_gem',
-                                scale_gem_expr: bool = True,
                                 use_tfs: bool = False,
-                                model_organism: str= 'mouse',
-                                flowsig_network_key: str = 'flowsig_network',
-                                flowsig_expr_key: str = 'X_flow'):
+                                model_organism: Literal['human', 'mouse'] = 'human',
+                                config: FlowSigConfig = FlowSigConfig()) -> None:
 
+    if liana_output_key not in adata.uns:
+        raise KeyError(f"'{liana_output_key}' not found in adata.uns")
+    
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_liana(adata, liana_output_key)
 
     adata_inflow, inflow_vars = construct_inflow_signals_liana(adata, liana_output_key, use_tfs, model_organism)
 
-    adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
+    adata_gem, flow_gem_vars = construct_gem_expressions(adata, config.gem_expr_key, config.scale_gem_expr)
 
-    # Determine the flow_variables
-    flow_variables = outflow_vars + inflow_vars + flow_gem_vars
+    _assemble_flows(adata, adata_outflow, adata_inflow, adata_gem, config=config)
 
-    flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
-
-    for i, outflow_var in enumerate(outflow_vars):
-        flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
-
-    for i, inflow_var in enumerate(inflow_vars):
-        flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
-
-    for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
-
-    flow_variable_types = adata_outflow.var['type'].tolist() \
-                            + adata_inflow.var['type'].tolist() \
-                            + adata_gem.var['type'].tolist()
-    
-    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
-                            + adata_inflow.var['downstream_tfs'].tolist() \
-                            + adata_gem.var['downstream_tfs'].tolist()
-    
-    flow_interactions = adata_outflow.var['interactions'].tolist() \
-                            + adata_inflow.var['interactions'].tolist() \
-                            + adata_gem.var['interactions'].tolist()
-
-    # Store the type, relevant downstream_TF, and received interactions for each variable
-    # Store all the information on the flow variables
-    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Type': flow_variable_types,
-                                      'Downstream_TF': flow_downstream_tfs,
-                                      'Interaction': flow_interactions})
-    
-    adata.obsm[flowsig_expr_key] = flow_expressions
-    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
-
-def construct_inflow_signals_commot(adata: sc.AnnData,
-                                    commot_output_key: str):
+def construct_inflow_signals_commot(adata: AnnData,
+                                    commot_output_key: str) -> Tuple[AnnData, List[str]]:
 
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
@@ -724,10 +695,10 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
         inflow_interactions.append('/'.join(sorted(inferred_interactions)))
 
         # We sum the total received signal across each interaction at each spot
-        for inter in inferred_interactions:
-            inflow_expressions[:, i] += adata.obsm[commot_output_key + '-sum-receiver']['r-' + inter]
+        cols = [f"r-{inter}" for inter in inferred_interactions]
+        inflow_expressions[:, i] = adata.obsm[f"{commot_output_key}-sum-receiver"][cols].sum(1)
 
-    adata_inflow = sc.AnnData(X=inflow_expressions)
+    adata_inflow = AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = ''
     adata_inflow.var['type'] = 'inflow' 
@@ -735,13 +706,14 @@ def construct_inflow_signals_commot(adata: sc.AnnData,
 
     return adata_inflow, inflow_vars
 
-def construct_outflow_signals_commot(adata: sc.AnnData,
-                                    commot_output_key: str, 
-                                    ):
+def construct_outflow_signals_commot(adata: AnnData,
+                                    commot_output_key: str
+                                    ) -> Tuple[AnnData, List[str]]:
     
+    vars_set = set(adata.var_names)
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
-    outflow_vars = [var for var in outflow_vars if var in adata.var_names]
+    outflow_vars = [var for var in outflow_vars if var in vars_set]
 
     outflow_interactions = []
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
@@ -754,7 +726,7 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
         # Outflow signal expression is simply ligand gene expression
         outflow_expressions[:, i] += adata[:, outflow_var].X.toarray().flatten()
 
-    adata_outflow = sc.AnnData(X=outflow_expressions)
+    adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
     adata_outflow.var['downstream_tfs'] = ''
     adata_outflow.var['type'] = 'outflow' 
@@ -762,53 +734,52 @@ def construct_outflow_signals_commot(adata: sc.AnnData,
 
     return adata_outflow, outflow_vars
 
-def construct_flows_from_commot(adata: sc.AnnData,
+def construct_flows_from_commot(adata: AnnData,
                                 commot_output_key: str,
-                                gem_expr_key: str = 'X_gem',
-                                scale_gem_expr: bool = True,
-                                flowsig_network_key: str = 'flowsig_network',
-                                flowsig_expr_key: str = 'X_flow'):
+                                config: FlowSigConfig = FlowSigConfig()) -> None:
+
+    if commot_output_key not in adata.uns:
+        raise KeyError(f"'{commot_output_key}' not found in adata.uns")
     
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_commot(adata, commot_output_key)
 
     adata_inflow, inflow_vars = construct_inflow_signals_commot(adata, commot_output_key)
 
-    adata_gem, flow_gem_vars = construct_gem_expressions(adata, gem_expr_key, scale_gem_expr)
+    adata_gem, flow_gem_vars = construct_gem_expressions(adata, config.gem_expr_key, config.scale_gem_expr)
 
     # Determine the flow_variables
-    flow_variables = outflow_vars + inflow_vars + flow_gem_vars
+    _assemble_flows(adata, adata_outflow, adata_inflow, adata_gem, config=config)
 
-    flow_expressions = np.zeros((adata.n_obs, len(flow_variables)))
+def construct_flow_expressions(
+        adata: AnnData,
+        *,
+        spatial: bool,
+        method: Literal['cellchat', 'cellphonedb', 'liana'] | None = None,
+        **kwargs: Any,
+) -> None:
 
-    for i, outflow_var in enumerate(outflow_vars):
-        flow_expressions[:, i] = adata_outflow[:, outflow_var].X.toarray().flatten()
+    if spatial:
+        # For spatial data, flows are based on COMMOT output
+        construct_flows_from_commot(adata, **kwargs)
+        return
 
-    for i, inflow_var in enumerate(inflow_vars):
-        flow_expressions[:, len(outflow_vars) + i] = adata_inflow[:, inflow_var].X.toarray().flatten()
-
-    for i, gem in enumerate(flow_gem_vars):
-        flow_expressions[:, len(outflow_vars) + len(inflow_vars) + i] = adata_gem[:, gem].X.flatten()
-
-    flow_variable_types = adata_outflow.var['type'].tolist() \
-                            + adata_inflow.var['type'].tolist() \
-                            + adata_gem.var['type'].tolist()
-    
-    flow_downstream_tfs = adata_outflow.var['downstream_tfs'].tolist() \
-                            + adata_inflow.var['downstream_tfs'].tolist() \
-                            + adata_gem.var['downstream_tfs'].tolist()
-    
-    flow_interactions = adata_outflow.var['interactions'].tolist() \
-                            + adata_inflow.var['interactions'].tolist() \
-                            + adata_gem.var['interactions'].tolist()
-
-    # Store the type, relevant downstream_TF, and received interactions for each variable
-    # Store all the information on the flow variables
-    flow_var_info = pd.DataFrame(index = pd.Index(flow_variables),
-                                 data = {'Type': flow_variable_types,
-                                      'Downstream_TF': flow_downstream_tfs,
-                                      'Interaction': flow_interactions})
-    
-    adata.obsm[flowsig_expr_key] = flow_expressions
-    adata.uns[flowsig_network_key] = {'flow_var_info': flow_var_info}
-
+    else:
+        if method is None:
+            raise ValueError(
+                "Argument 'method' must be provided when spatial=False. "
+                "Choose from: 'cellchat', 'cellphonedb', or 'liana'."
+            )
+        
+        method = method.lower()
+        if method == 'cellchat':
+            construct_flows_from_cellchat(adata, **kwargs)
+        elif method == 'cellphonedb':
+            construct_flows_from_cellphonedb(adata, **kwargs)
+        elif method == 'liana':
+            construct_flows_from_liana(adata, **kwargs)
+        else:
+            raise ValueError(
+                f"Unrecognised method '{method}'. "
+                "Valid options are: 'cellchat', 'cellphonedb', or 'liana'."
+            )

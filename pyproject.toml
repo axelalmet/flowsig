@@ -1,6 +1,6 @@
 [project]
 name = "flowsig"
-version = "0.2.0"
+version = "0.2.0w"
 description = "A package to infer dependent intercellular communication from single-cell and spatial transcriptomics data."
 authors = [
     {name = "Axel A. Almet"}

@@ -27,9 +27,16 @@ def _load_cellchat_tfs(model_organism: str) -> pd.DataFrame:
 
 def _safe_get(adata: AnnData, gene: str) -> Optional[np.ndarray]:
     try:
-        return adata[:, gene].X.A1          # works for csr & csc sparse
-    except KeyError:                        # gene not in the matrix
+        return adata[:, gene].X.A1          
+    except KeyError:                        
         return None
+
+def _dense_expr(adata: AnnData, genes: List[str]|str) -> np.ndarray:
+
+    if isinstance(genes, str):
+        return adata[:, genes].X.A1
+    else:
+        return adata[:, genes].X.toarray()      
     
 def _assemble_flows(
         adata: AnnData,
@@ -174,7 +181,7 @@ def construct_inflow_signals_cellchat(adata: AnnData,
                 
             else:
                 
-                unit_expression = adata[:, unit].X.toarray().flatten()
+                unit_expression = _dense_expr(adata, unit).ravel()
 
                 receptor_expression *= unit_expression
                 considered_receptors.append(unit)
@@ -216,15 +223,9 @@ def construct_inflow_signals_cellchat(adata: AnnData,
         unique_inflow_vars_and_tfs[receptor] = sorted(list(downstream_tfs))
         
         if len(downstream_tfs) != 0:
-            
-            average_tf_expression = np.zeros((adata.n_obs, ))
-            
-            for tf in downstream_tfs:
-                
-                average_tf_expression += adata[:, tf].X.toarray().flatten()
-                
-            average_tf_expression /= len(downstream_tfs)
-            
+                            
+            average_tf_expression = _dense_expr(adata, downstream_tfs).mean(axis=1).ravel()
+                            
             inflow_expressions_adjusted[:, i] *= average_tf_expression
             
     inflow_downstream_tfs = []
@@ -274,10 +275,8 @@ def construct_outflow_signals_cellchat(adata: AnnData,
             relevant_interactions[ligand] = interactions_with_ligand
 
     outflow_vars = list(relevant_interactions.keys())
-    outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
 
-    for i, signal in enumerate(outflow_vars):
-        outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
+    outflow_expressions = _dense_expr(adata, outflow_vars)
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
@@ -347,14 +346,9 @@ def construct_inflow_signals_cellphonedb(adata: AnnData,
                     unique_inflow_vars_and_interactions[receptor] = interactions_for_receptor
                 
     inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
-    num_inflow_vars = len(inflow_vars)
+            
+    inflow_expressions = _dense_expr(adata, inflow_vars)
 
-    inflow_expressions = np.zeros((adata.n_obs, num_inflow_vars)) 
-
-    for i, receptor in enumerate(inflow_vars):
-        
-        inflow_expressions[:, i] = adata[:, receptor].X.toarray().flatten()
-        
     inflow_expressions_adjusted = inflow_expressions.copy()
 
     inflow_interactions = []
@@ -378,14 +372,8 @@ def construct_inflow_signals_cellphonedb(adata: AnnData,
         
         if len(possible_downstream_tfs) != 0:
             
-            average_tf_expression = np.zeros((adata.n_obs, ))
-            
-            for tf in possible_downstream_tfs:
-                
-                average_tf_expression += adata[:, tf].X.toarray().flatten()
-                
-            average_tf_expression /= len(possible_downstream_tfs)
-            
+            average_tf_expression = _dense_expr(adata, possible_downstream_tfs).mean(1).ravel()
+                            
             inflow_expressions_adjusted[:, i] *= average_tf_expression
             
     inflow_downstream_tfs = []
@@ -410,7 +398,6 @@ def construct_outflow_signals_cellphonedb(adata: AnnData,
 
     cellphonedb_output_merged = pd.concat([adata.uns[cellphonedb_output_key][sample] for sample in adata.uns[cellphonedb_output_key]])
     cellphonedb_interactions = cellphonedb_output_merged['interacting_pair'].unique().tolist()
-    outflow_vars = []
     relevant_interactions = {}
 
     for inter in cellphonedb_interactions:
@@ -420,20 +407,15 @@ def construct_outflow_signals_cellphonedb(adata: AnnData,
         for ligand in ligands:
             if (ligand in vars_set):
 
-                if (ligand not in outflow_vars):
-                    outflow_vars.append(ligand)
-
+                if (ligand not in relevant_interactions):
                     relevant_interactions[ligand] = [inter]
 
                 else:
-                    interactions_with_ligand = relevant_interactions[ligand]
-                    interactions_with_ligand.append(inter)
-                    relevant_interactions[ligand] = interactions_with_ligand
+                    relevant_interactions[ligand].append(inter)
 
-    outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
+    outflow_vars = list(relevant_interactions.keys())
 
-    for i, signal in enumerate(outflow_vars):
-        outflow_expressions[:, i] = adata[:, signal].X.toarray().flatten()
+    outflow_expressions = _dense_expr(adata, outflow_vars)
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
@@ -532,7 +514,7 @@ def construct_inflow_signals_liana(adata: AnnData,
                     
                 else:
                     
-                    unit_expression = adata[:, unit].X.toarray().flatten()
+                    unit_expression = _dense_expr(adata, unit)
 
                     receptor_expression *= unit_expression
                     considered_receptors.append(unit)
@@ -575,7 +557,7 @@ def construct_inflow_signals_liana(adata: AnnData,
                 
                 for tf in downstream_tfs:
                     
-                    average_tf_expression += adata[:, tf].X.toarray().flatten()
+                    average_tf_expression += adata[:, tf].X.toarray().ravel()
                     
                 average_tf_expression /= len(downstream_tfs)
                 
@@ -639,7 +621,7 @@ def construct_outflow_signals_liana(adata: AnnData,
                 
             else:
                 
-                unit_expression = adata[:, unit].X.toarray().flatten()
+                unit_expression = _dense_expr(adata, unit).ravel()
 
                 ligand_expression *= unit_expression
                 considered_ligands.append(unit)
@@ -723,8 +705,8 @@ def construct_outflow_signals_commot(adata: AnnData,
         inferred_interactions = [pair[2:] for pair in adata.obsm[commot_output_key + '-sum-sender'].columns if pair.startswith('s-' + outflow_var)]
         outflow_interactions.append('/'.join(sorted(inferred_interactions)))
 
-        # Outflow signal expression is simply ligand gene expression
-        outflow_expressions[:, i] += adata[:, outflow_var].X.toarray().flatten()
+    # Outflow signal expression is simply ligand gene expression
+    outflow_expressions = _dense_expr(adata, outflow_vars)
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)

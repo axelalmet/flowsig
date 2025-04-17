@@ -149,45 +149,25 @@ def construct_inflow_signals_cellchat(adata: AnnData,
             unique_inflow_vars_and_interactions[receptor] = [interaction]
             
         else:
-            interactions_for_receptor = unique_inflow_vars_and_interactions[receptor]
-            interactions_for_receptor.append(interaction)
-            unique_inflow_vars_and_interactions[receptor] = interactions_for_receptor
-            
+            unique_inflow_vars_and_interactions[receptor].append(interaction)
             
     inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
-    num_inflow_vars = len(inflow_vars)
+    split_receptors = [receptor.split('+') for receptor in inflow_vars]
+    unique_receptors = sorted({unit for rec in split_receptors for unit in rec})
 
-    inflow_expressions = np.zeros((adata.n_obs, num_inflow_vars)) 
+    receptor_expression = _dense_expr(adata, unique_receptors)
 
-    for i, receptor in enumerate(inflow_vars):
+    receptor_indices = {rec: i for i, rec in enumerate(unique_receptors)}
+    # Take the log to speed up when we take the geometric mean
+    log_receptor_expr = np.log(receptor_expression + 1e-12)
+
+    inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
+    for k, units in enumerate(split_receptors):
         
-        receptor_expression = np.ones((adata.n_obs, ))
-        
-        split_receptor = receptor.split('+')
-        exprs = [_safe_get(adata, unit) for unit in split_receptor]
-        exprs = [expr for expr in exprs if expr is not None] # Account for missing genes
+        unit_cols = [receptor_indices[unit] for unit in units]
 
-        # Take geometric mean
-        if exprs:                                    
-            receptor_expression = np.prod(exprs, axis=0) ** (1.0 / len(exprs))
-            inflow_expressions[:, i] = receptor_expression
-
-        considered_receptors = []
-        
-        for unit in split_receptor:
-            
-            if unit not in vars_set:
-                print(unit)
-                
-            else:
-                
-                unit_expression = _dense_expr(adata, unit).ravel()
-
-                receptor_expression *= unit_expression
-                considered_receptors.append(unit)
-                
-        if len(considered_receptors) != 0:
-            inflow_expressions[:, i] = receptor_expression**(1.0 / len(considered_receptors))
+        # More efficient way of takingg geometric mean        
+        inflow_expressions[:, k] = np.exp(log_receptor_expr[:, unit_cols].mean(axis=1))
         
     inflow_expressions_adjusted = inflow_expressions.copy()
 
@@ -270,9 +250,7 @@ def construct_outflow_signals_cellchat(adata: AnnData,
                 relevant_interactions[ligand] = [inter]
 
         else:
-            interactions_with_ligand = relevant_interactions[ligand]
-            interactions_with_ligand.append(inter)
-            relevant_interactions[ligand] = interactions_with_ligand
+            relevant_interactions[ligand].append(inter)
 
     outflow_vars = list(relevant_interactions.keys())
 
@@ -341,9 +319,7 @@ def construct_inflow_signals_cellphonedb(adata: AnnData,
                     unique_inflow_vars_and_interactions[receptor] = [interaction]
                     
                 else:
-                    interactions_for_receptor = unique_inflow_vars_and_interactions[receptor]
-                    interactions_for_receptor.append(interaction)  
-                    unique_inflow_vars_and_interactions[receptor] = interactions_for_receptor
+                    unique_inflow_vars_and_interactions[receptor].append(interaction)
                 
     inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
             
@@ -496,32 +472,23 @@ def construct_inflow_signals_liana(adata: AnnData,
             unique_inflow_vars_and_interactions[inflow_var] = interactions_for_receptor
                 
         inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
-        num_inflow_vars = len(inflow_vars)
+        split_receptors = [receptor.split('+') for receptor in inflow_vars]
+        unique_receptors = sorted({unit for rec in split_receptors for unit in rec})
 
-        inflow_expressions = np.zeros((adata.n_obs, num_inflow_vars)) 
+        receptor_expression = _dense_expr(adata, unique_receptors)
 
-        for i, receptor in enumerate(inflow_vars):
-            
-            receptor_expression = np.ones((adata.n_obs, ))
-            
-            split_receptor = receptor.split('+')
-            considered_receptors = []
-            
-            for unit in split_receptor:
-                
-                if unit not in vars_set:
-                    print(unit)
-                    
-                else:
-                    
-                    unit_expression = _dense_expr(adata, unit)
+        receptor_indices = {rec: i for i, rec in enumerate(unique_receptors)}
+        # Take the log to speed up when we take the geometric mean
+        log_receptor_expr = np.log(receptor_expression + 1e-12)
 
-                    receptor_expression *= unit_expression
-                    considered_receptors.append(unit)
-                    
-            if len(considered_receptors) != 0:
-                inflow_expressions[:, i] = receptor_expression**(1.0 / len(considered_receptors))
+        inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
+        for k, units in enumerate(split_receptors):
             
+            unit_cols = [receptor_indices[unit] for unit in units]
+
+            # More efficient way of takingg geometric mean        
+            inflow_expressions[:, k] = np.exp(log_receptor_expr[:, unit_cols].mean(axis=1))
+        
         inflow_expressions_adjusted = inflow_expressions.copy()
 
         inflow_interactions = []
@@ -553,14 +520,8 @@ def construct_inflow_signals_liana(adata: AnnData,
             
             if len(downstream_tfs) != 0:
                 
-                average_tf_expression = np.zeros((adata.n_obs, ))
-                
-                for tf in downstream_tfs:
-                    
-                    average_tf_expression += adata[:, tf].X.toarray().ravel()
-                    
-                average_tf_expression /= len(downstream_tfs)
-                
+                average_tf_expression = _dense_expr(adata, downstream_tfs).mean(axis=1).ravel()
+                                    
                 inflow_expressions_adjusted[:, i] *= average_tf_expression
                 
         inflow_downstream_tfs = []
@@ -606,28 +567,22 @@ def construct_outflow_signals_liana(adata: AnnData,
         relevant_interactions[outflow_var] = interactions_with_ligand
 
     outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
+    split_ligands = [ligand.split('+') for receptor in outflow_vars]
+    unique_ligands = sorted({unit for lig in split_ligands for unit in lig})
 
-    for i, ligand in enumerate(outflow_vars):
-            
-        ligand_expression = np.ones((adata.n_obs, ))
+    ligand_expression = _dense_expr(adata, unique_ligands)
 
-        split_ligand = ligand.split('+')
-        considered_ligands = []
+    ligand_indices = {lig: i for i, lig in enumerate(unique_ligands)}
+    # Take the log to speed up when we take the geometric mean
+    log_ligand_expr = np.log(ligand_expression + 1e-12)
+
+    outflow_expressions = np.empty((adata.n_obs, len(outflow_vars)))
+    for k, units in enumerate(split_ligands):
         
-        for unit in split_ligand:
-            
-            if unit not in vars_set:
-                logger.debug("Gene %s not present in var_names", unit)
-                
-            else:
-                
-                unit_expression = _dense_expr(adata, unit).ravel()
+        unit_cols = [ligand_indices[unit] for unit in units]
 
-                ligand_expression *= unit_expression
-                considered_ligands.append(unit)
-                
-        if len(considered_ligands) != 0:
-            outflow_expressions[:, i] = ligand_expression**(1.0 / len(considered_ligands))
+        # More efficient way of takingg geometric mean        
+        outflow_expressions[:, k] = np.exp(log_ligand_expr[:, unit_cols].mean(axis=1))
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
@@ -670,7 +625,7 @@ def construct_inflow_signals_commot(adata: AnnData,
 
 
     inflow_interactions = []
-    inflow_expressions = np.zeros((adata.n_obs, len(inflow_vars)))
+    inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
     for i, inflow_var in enumerate(inflow_vars):
         lig = inflow_var.strip('inflow-')
         inferred_interactions = [pair.replace('r-', '') for pair in adata.obsm[commot_output_key + '-sum-receiver'].columns if pair.startswith('r-' + lig)]
@@ -698,7 +653,6 @@ def construct_outflow_signals_commot(adata: AnnData,
     outflow_vars = [var for var in outflow_vars if var in vars_set]
 
     outflow_interactions = []
-    outflow_expressions = np.zeros((adata.n_obs, len(outflow_vars)))
 
     for i, outflow_var in enumerate(outflow_vars):
 

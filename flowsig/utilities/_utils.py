@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from anndata import AnnData
 from typing import Union, Sequence
 
-def get_top_nmf_genes(adata: sc.AnnData,
+def get_top_nmf_genes(adata: AnnData,
                       gems: Union[str, Sequence[str]],
                       n_genes: int,
                       gene_type: str = 'all',
@@ -68,7 +68,7 @@ def get_top_nmf_genes(adata: sc.AnnData,
                                           'Weight': gem_weights})
     return top_nmf_genes_df
 
-def get_top_pyliger_genes(adata: sc.AnnData,
+def get_top_pyliger_genes(adata: AnnData,
                         gems: Union[str, Sequence[str]],
                         n_genes: int,
                         gene_type: str = 'all',
@@ -145,7 +145,7 @@ def get_top_pyliger_genes(adata: sc.AnnData,
                                           'Weight': gem_weights})
     return top_pyliger_genes_df
 
-def get_top_nsf_genes(adata: sc.AnnData,
+def get_top_nsf_genes(adata: AnnData,
                       gems: Union[str, Sequence[str]],
                       n_genes: int,
                       gene_type: str = 'all',
@@ -210,7 +210,7 @@ def get_top_nsf_genes(adata: sc.AnnData,
                                           'Weight': gem_weights})
     return top_nsf_genes_df
 
-def get_top_gem_genes(adata: sc.AnnData,
+def get_top_gem_genes(adata: AnnData,
                       gems: Union[str, Sequence[str]],
                       n_genes: int,
                       gem_key: str,

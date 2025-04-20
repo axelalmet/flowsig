@@ -1,11 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional, Literal, Any, Tuple
+from typing import Optional, Literal, Any, Tuple
 import numpy as np
 import scanpy as sc
 from anndata import AnnData
 import pandas as pd
-import os
 from functools import lru_cache
 import pathlib
 import logging
@@ -31,7 +30,7 @@ def _safe_get(adata: AnnData, gene: str) -> Optional[np.ndarray]:
     except KeyError:                        
         return None
 
-def _dense_expr(adata: AnnData, genes: List[str]|str) -> np.ndarray:
+def _dense_expr(adata: AnnData, genes: list[str]|str) -> np.ndarray:
 
     if isinstance(genes, str):
         return adata[:, genes].X.A1
@@ -77,7 +76,7 @@ def _assemble_flows(
 def construct_gem_expressions(adata: AnnData,
                             gem_expr_key: str = 'X_gem',
                             scale_gem_expr: bool = True,
-                            layer_key: Optional[str] = None) -> Tuple[AnnData, List[str]]:
+                            layer_key: Optional[str] = None) -> Tuple[AnnData, list[str]]:
     
     gem_expressions = adata.obsm[gem_expr_key]
 
@@ -111,8 +110,8 @@ def construct_gem_expressions(adata: AnnData,
 def construct_inflow_signals_cellchat(adata: AnnData,
                                     cellchat_output_key: str, 
                                     model_organism: Literal['human', 'mouse'] = 'human',
-                                    tfs_to_use: Optional[List[str]] = None,
-                                    method: Literal['v1', 'v2'] = 'v1') -> Tuple[AnnData, List[str]]:
+                                    tfs_to_use: Optional[list[str]] = None,
+                                    method: Literal['v1', 'v2'] = 'v1') -> Tuple[AnnData, list[str]]:
 
     vars_set = set(adata.var_names)  
 
@@ -152,25 +151,6 @@ def construct_inflow_signals_cellchat(adata: AnnData,
             unique_inflow_vars_and_interactions[receptor].append(interaction)
             
     inflow_vars = sorted(list(unique_inflow_vars_and_interactions.keys()))
-    split_receptors = [receptor.split('+') for receptor in inflow_vars]
-    unique_receptors = sorted({unit for rec in split_receptors for unit in rec})
-
-    receptor_expression = _dense_expr(adata, unique_receptors)
-
-    receptor_indices = {rec: i for i, rec in enumerate(unique_receptors)}
-    # Take the log to speed up when we take the geometric mean
-    log_receptor_expr = np.log(receptor_expression + 1e-12)
-
-    inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
-    for k, units in enumerate(split_receptors):
-        
-        unit_cols = [receptor_indices[unit] for unit in units]
-
-        # More efficient way of takingg geometric mean        
-        inflow_expressions[:, k] = np.exp(log_receptor_expr[:, unit_cols].mean(axis=1))
-        
-    inflow_expressions_adjusted = inflow_expressions.copy()
-
     inflow_interactions = []
     unique_inflow_vars_and_tfs = {}
 
@@ -201,12 +181,56 @@ def construct_inflow_signals_cellchat(adata: AnnData,
             downstream_tfs = np.intersect1d(downstream_tfs, tfs_to_use)
         
         unique_inflow_vars_and_tfs[receptor] = sorted(list(downstream_tfs))
-        
-        if len(downstream_tfs) != 0:
-                            
-            average_tf_expression = _dense_expr(adata, downstream_tfs).mean(axis=1).ravel()
-                            
-            inflow_expressions_adjusted[:, i] *= average_tf_expression
+
+    split_receptors = [receptor.split('+') for receptor in inflow_vars]
+    unique_receptors = sorted({unit for rec in split_receptors for unit in rec})
+    receptor_expression = _dense_expr(adata, unique_receptors)
+    receptor_indices = {rec: i for i, rec in enumerate(unique_receptors)}
+
+    unique_tfs = sorted({tf for tfs in unique_inflow_vars_and_tfs.values() for tf in tfs})
+    tfs_expression = _dense_expr(adata, unique_tfs)
+    tf_indices = {tf: i for i, tf in enumerate(unique_tfs)}
+
+    inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
+    if method == 'v1': # The original way we did it
+
+        # Take the log to speed up when we take the geometric mean
+        log_receptor_expr = np.log(receptor_expression + 1e-12)
+
+        for k, units in enumerate(split_receptors):
+            
+            receptor = inflow_vars[k]
+            unit_cols = [receptor_indices[unit] for unit in units]
+
+            # More efficient way of takingg geometric mean        
+            inflow_expressions[:, k] = np.exp(log_receptor_expr[:, unit_cols].mean(axis=1))
+            
+            inflow_downstream_tfs = unique_inflow_vars_and_tfs[receptor]
+            
+            if len(inflow_downstream_tfs) != 0:
+
+                tf_cols = [tf_indices[tf] for tf in inflow_downstream_tfs]
+                                                                
+                inflow_expressions[:, k] *= tfs_expression[:, tf_cols].mean(axis=1)
+    
+    else: # New method to simplify everything
+
+        for k, units in enumerate(split_receptors):
+            
+            receptor = inflow_vars[k]
+            unit_cols = [receptor_indices[unit] for unit in units]
+
+            # Take the minimum instead of the geometric mean (it's kind of equivalent, you're really weighted down by the minimum of the sub-units)
+            rec_expression = receptor_expression[:, unit_cols].min(axis=1)
+
+            # Take the maximum because you just need SOME activation
+            inflow_downstream_tfs = unique_inflow_vars_and_tfs[receptor]
+            tf_cols = [tf_indices[tf] for tf in inflow_downstream_tfs] if len(inflow_downstream_tfs) != 0 else None
+
+            tf_expression = tf_expression[:, tf_cols].max(axis=1) if tf_cols is not None else np.ones_like(rec_expression)
+
+            # More  numerically stable way of taking geometric mean 
+            inflow_expressions[:, k] = np.sqrt(np.multiply(rec_expression, tf_expression))
             
     inflow_downstream_tfs = []
     for i, inflow_var in enumerate(inflow_vars):
@@ -215,7 +239,7 @@ def construct_inflow_signals_cellchat(adata: AnnData,
         downstream_tfs = unique_inflow_vars_and_tfs[inflow_var]
         inflow_downstream_tfs.append('_'.join(sorted(downstream_tfs)))
         
-    adata_inflow = AnnData(X=inflow_expressions_adjusted)
+    adata_inflow = AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
     adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
     adata_inflow.var['type'] = 'inflow' # Define variable types
@@ -225,7 +249,7 @@ def construct_inflow_signals_cellchat(adata: AnnData,
 
 def construct_outflow_signals_cellchat(adata: AnnData,
                                     cellchat_output_key: str, 
-                                    ) -> Tuple[AnnData, List[str]]:
+                                    ) -> Tuple[AnnData, list[str]]:
     
     cellchat_output_merged = pd.concat([adata.uns[cellchat_output_key][sample] for sample in adata.uns[cellchat_output_key]])
     cellchat_interactions = cellchat_output_merged['interaction_name_2'].unique().tolist()
@@ -273,7 +297,7 @@ def construct_outflow_signals_cellchat(adata: AnnData,
 def construct_flows_from_cellchat(adata: AnnData,
                                 cellchat_output_key: str,
                                 model_organism: Literal['human', 'mouse'] = 'human',
-                                tfs_to_use: Optional[List[str]] = None,
+                                tfs_to_use: Optional[list[str]] = None,
                                 config: FlowSigConfig = FlowSigConfig(),
                                 method: Literal['v1', 'v2'] = 'v1') -> None:
 
@@ -296,7 +320,7 @@ def construct_flows_from_cellchat(adata: AnnData,
     
 def construct_inflow_signals_cellphonedb(adata: AnnData,
                                     cellphonedb_output_key: str,
-                                    cellphonedb_active_tfs_key: str) -> Tuple[AnnData, List[str]]:
+                                    cellphonedb_active_tfs_key: str) -> Tuple[AnnData, list[str]]:
     
     vars_set = set(adata.var_names)
 
@@ -368,7 +392,7 @@ def construct_inflow_signals_cellphonedb(adata: AnnData,
     return adata_inflow, inflow_vars
 
 def construct_outflow_signals_cellphonedb(adata: AnnData,
-                                    cellphonedb_output_key: str) -> Tuple[AnnData, List[str]]:
+                                    cellphonedb_output_key: str) -> Tuple[AnnData, list[str]]:
 
     vars_set = set(adata.var_names)
 
@@ -434,7 +458,7 @@ def construct_flows_from_cellphonedb(adata: AnnData,
 def construct_inflow_signals_liana(adata: AnnData,
                                     liana_output_key: str, 
                                     use_tfs: bool = False,
-                                    model_organism: Literal['human', 'mouse'] = 'human') -> Tuple[AnnData, List[str]]:
+                                    model_organism: Literal['human', 'mouse'] = 'human') -> Tuple[AnnData, list[str]]:
     
     model_organisms = ['human', 'mouse']
 
@@ -541,7 +565,7 @@ def construct_inflow_signals_liana(adata: AnnData,
     
 def construct_outflow_signals_liana(adata: AnnData,
                                     liana_output_key: str, 
-                                    ) -> Tuple[AnnData, List[str]]:
+                                    ) -> Tuple[AnnData, list[str]]:
     vars_set = set(adata.var_names)
 
     liana_output_merged = pd.concat([adata.uns[liana_output_key][sample] for sample in adata.uns[liana_output_key]])
@@ -617,7 +641,7 @@ def construct_flows_from_liana(adata: AnnData,
     _assemble_flows(adata, adata_outflow, adata_inflow, adata_gem, config=config)
 
 def construct_inflow_signals_commot(adata: AnnData,
-                                    commot_output_key: str) -> Tuple[AnnData, List[str]]:
+                                    commot_output_key: str) -> Tuple[AnnData, list[str]]:
 
     # Inflow variables are inferred from outflow variables
     outflow_vars = sorted(adata.uns[commot_output_key + '-info']['df_ligrec']['ligand'].unique().tolist())
@@ -645,7 +669,7 @@ def construct_inflow_signals_commot(adata: AnnData,
 
 def construct_outflow_signals_commot(adata: AnnData,
                                     commot_output_key: str
-                                    ) -> Tuple[AnnData, List[str]]:
+                                    ) -> Tuple[AnnData, list[str]]:
     
     vars_set = set(adata.var_names)
     # Inflow variables are inferred from outflow variables

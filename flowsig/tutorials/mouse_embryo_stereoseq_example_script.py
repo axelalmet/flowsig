@@ -24,18 +24,13 @@ fs.pp.construct_spatial_blocks(adata,
                              spatial_key = "spatial")
 
 # We first construct the potential cellular flows from the commot output
-fs.pp.construct_flows_from_commot(adata,
-                                commot_output_key,
-                                gem_expr_key = 'X_gem',
-                                scale_gem_expr = True,
-                                flowsig_network_key = 'flowsig_network',
-                                flowsig_expr_key = 'X_flow')
+fs.pp.construct_flow_expressions(adata,
+                    commot_output_key=commot_output_key,
+                    spatial=True)
 
 # Then we subset for "spatially flowing" variables
 # (How do we turn the squidpy arguments into a kwargs)
 fs.pp.determine_informative_variables(adata,  
-                                    flowsig_expr_key = 'X_flow',
-                                    flowsig_network_key = 'flowsig_network',
                                     spatial = True,
                                     moran_threshold = 0.15,
                                     coord_type = 'grid',
@@ -49,8 +44,6 @@ fs.pp.determine_informative_variables(adata,
 
 # Now we are ready to learn the network
 fs.tl.learn_intercellular_flows(adata,
-                        flowsig_key = 'flowsig_network',
-                        flow_expr_key = 'X_flow',
                         use_spatial = True,
                         block_key = 'spatial_block',
                         n_jobs = 1,
@@ -68,7 +61,7 @@ edge_threshold = 0.7
 fs.tl.filter_low_confidence_edges(adata,
                                 edge_threshold = edge_threshold,
                                 flowsig_network_key = 'flowsig_network',
-                                adjacency_key = 'adjacency',
-                                filtered_key = 'adjacency_filtered')
+                                adjacency_key = 'adjacency_validated',
+                                filtered_key = 'filtered')
 
 adata.write('data/chen22_svg_E9.5.h5ad', compression='gzip')

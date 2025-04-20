@@ -8,6 +8,8 @@ FlowSig requires:
 
 The code used to generate all of the results in Almet et al., "Inferring pattern-driving intercellular flows from single-cell and spatial transcriptomics", can be found in another GitHub repository [here](https://github.com/axelalmet/FlowSigAnalysis_2023).
 
+**Update (April 20, 2025): I've done some re-factoring to make FlowSig more efficient in its construction of flow variables and streamlined in its implementation. Some of the function arguments are a little different and I've done my best to update the documentation and tutorials, but please let me know if you run into any issues!**
+
 <details>
   <summary>Installation</summary>
   
@@ -15,7 +17,7 @@ The code used to generate all of the results in Almet et al., "Inferring pattern
   
 The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
 
-To generate a virtual environment, run the command. N.B. make sure you're using Python 3.10!
+**To generate a virtual environment, run the command. N.B. make sure you're using Python 3.10!**
 
 ```
 # Create the virtual environment
@@ -93,13 +95,12 @@ The kay assumption of flowsig is that all intercellular information flows are di
 
 For non-spatial scRNA-seq, we need to specify the model organism so that FlowSig knows which receptor-transcription factor targets list to look at.
 ```
-fs.pp.construct_flows_from_cellchat(adata,
-                                cellchat_output_key,
-                                gem_expr_key = 'X_gem',
-                                scale_gem_expr = True,
+fs.pp.construct_flow_expressions(adata,
+                                cellchat_output_key=cellchat_output_key,
                                 model_organism = 'human',
-                                flowsig_network_key = 'flowsig_network',
-                                flowsig_expr_key = 'X_flow')
+                                spatial = False,
+                                method = 'cellchat'
+                                )
 ```
 
 
@@ -107,13 +108,11 @@ To reduce the number of variables over which we have to infer intercellular flow
 
 ```
 fs.pp.ddetermine_informative_variables(adata,  
-                                    flowsig_expr_key = 'X_flow',
-                                    flowsig_network_key = 'flowsig_network',
-                                    spatial: bool = False,
+                                    spatial = False,
                                     condition_key = 'Condition',
-                                    control_key = 'Ctrl',
-                                    qval_threshold: float = 0.05,
-                                    logfc_threshold: float = 0.5)
+                                    control = 'Ctrl',
+                                    qval_threshold = 0.05,
+                                    logfc_threshold = 0.5)
 ```
 
 If you wanted to visualise which variables remained, e.g., which are differentially outflowing, you can run the following code:
@@ -142,9 +141,7 @@ This step uses [UT-IGSP](https://uhlerlab.github.io/causaldag/utigsp.html) to le
 ```
 fs.tl.learn_intercellular_flows(adata,
                         condition_key = condition_key,
-                        control_key = 'Ctrl', 
-                        flowsig_key = 'flowsig_network',
-                        flow_expr_key = 'X_flow',
+                        control = 'Ctrl', 
                         use_spatial = False,
                         n_jobs = 4,
                         n_bootstraps = 500)
@@ -157,7 +154,6 @@ First, we remove directed arcs that are not oriented from signal inflow to GEM, 
 
 ```
 fs.tl.apply_biological_flow(adata,
-                            flowsig_network_key = 'flowsig_network',
                             adjacency_key = 'adjacency',
                             validated_key = 'validated')
 ```
@@ -168,7 +164,6 @@ Second, we will remove directed arcs whose bootstrapped frequencies are below a 
 edge_threshold = 0.7
 fs.tl.filter_low_confidence_edges(adata,
                                 edge_threshold = edge_threshold,
-                                flowsig_network_key = 'flowsig_network',
                                 adjacency_key = 'adjacency_validated',
                                 filtered_key = 'filtered')
 ```
@@ -265,12 +260,9 @@ The kay assumption of flowsig is that all intercellular information flows are di
 
 For spatial data, we use COMMOT output directly to construct signal inflow expression and do not need knowledge about TF databases.
 ```
-fs.pp.construct_flows_from_commot(adata,
-                                commot_output_key,
-                                gem_expr_key = 'X_gem',
-                                scale_gem_expr = True,
-                                flowsig_network_key = 'flowsig_network',
-                                flowsig_expr_key = 'X_flow')
+fs.pp.construct_flow_expressions(adata,
+                      commot_output_key=commot_output_key,
+                      spatial = True)
 ```
 
 For spatial data, we retain spatially informative variables, which we determine by calculating the Moran's I value for signal inflow and signal outflow variables. In case the spatial graph has not been calculated for this data yet, FlowSig will do so, meaning that we need to specify both the coordinate type, `grid` or `generic`, and in the case of the former, `n_neighs`, which in this case, is 8.
@@ -279,8 +271,6 @@ Flow expression variables are defined to be spatially informative if their Moran
 
 ```
 fs.pp.determine_informative_variables(adata,  
-                                    flowsig_expr_key = 'X_flow',
-                                    flowsig_network_key = 'flowsig_network',
                                     spatial = True,
                                     moran_threshold = 0.15,
                                     coord_type = 'grid',
@@ -305,8 +295,6 @@ We use these blocks to learn the spatial intercellular flows.
 
 ```
 fs.tl.learn_intercellular_flows(adata,
-                        flowsig_key = 'flowsig_network',
-                        flow_expr_key = 'X_flow',
                         use_spatial = True,
                         block_key = 'spatial_kmeans',
                         n_jobs = 4,

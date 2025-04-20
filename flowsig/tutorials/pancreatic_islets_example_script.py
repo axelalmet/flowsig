@@ -20,29 +20,25 @@ adata.uns[cellchat_output_key] = {'Ctrl': cellchat_Ctrl,
                                   'IFNg': cellchat_IFNg}
 
 # We first construct the potential cellular flows from the cellchat output
-fs.pp.construct_flows_from_cellchat(adata,
-                                cellchat_output_key,
-                                gem_expr_key = 'X_gem',
-                                scale_gem_expr = True,
+fs.pp.construct_flow_expressions(adata,
+                                cellchat_output_key=cellchat_output_key,
                                 model_organism = 'human',
-                                flowsig_network_key = 'flowsig_network',
-                                flowsig_expr_key = 'X_flow')
+                                spatial = False,
+                                method = 'cellchat'
+                                )
 
 # Then we subset for "differentially flowing" variables
 fs.pp.determine_informative_variables(adata,  
-                                    flowsig_expr_key = 'X_flow',
-                                    flowsig_network_key = 'flowsig_network',
                                     spatial = False,
-                                    condition_key = condition_key,
+                                    condition_key = 'Condition',
+                                    control = 'Ctrl',
                                     qval_threshold = 0.05,
                                     logfc_threshold = 0.5)
 
 # Now we are ready to learn the network
 fs.tl.learn_intercellular_flows(adata,
                         condition_key = condition_key,
-                        control_key = 'Ctrl', 
-                        flowsig_key = 'flowsig_network',
-                        flow_expr_key = 'X_flow',
+                        control = 'Ctrl', 
                         use_spatial = False,
                         n_jobs = 1,
                         n_bootstraps = 10)
@@ -60,6 +56,6 @@ fs.tl.filter_low_confidence_edges(adata,
                                 edge_threshold = edge_threshold,
                                 flowsig_network_key = 'flowsig_network',
                                 adjacency_key = 'adjacency_validated',
-                                filtered_key = 'filtered')
+                                filtered_key = 'adjacency_filtered')
 
 # adata.write('data/burkhardt21_merged.h5ad', compression='gzip')

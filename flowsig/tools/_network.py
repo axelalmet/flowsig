@@ -65,7 +65,7 @@ def _bootstrap_network(
 
     if X_pert_list is not None:
         X_pert_rs_list = [
-            _resample_indices(X_pert, rng, indices_by_blocks=indices_by_block)
+            _resample_indices(X_pert, rng, indices_by_blocks=indices_by_blocks_pert)
             for X_pert, indices_by_blocks in zip(X_pert_list, indices_by_blocks_pert or [None]*len(X_pert_list))
         ]
         keep_idx, mats = _drop_zero_sd_cols([X_ctrl_rs, *X_pert_rs_list])
@@ -94,11 +94,11 @@ def _learn_utigsp(X_ctrl: np.ndarray,
     Learner function for the UT-IGSP algorithm.
     """
     suff_ctrl = partial_correlation_suffstat(X_ctrl, invert=True)
-    ci   = MemoizedCI_Tester(partial_correlation_test, suff_ctrl, alpha)
+    ci   = MemoizedCI_Tester(partial_correlation_test, suff_ctrl, alpha=alpha)
     
     # Invariance testing
     suff_inv = gauss_invariance_suffstat(X_ctrl, X_pert_list)
-    invariance_tester = MemoizedInvarianceTester(gauss_invariance_test, suff_inv, alpha_inv)
+    invariance_tester = MemoizedInvarianceTester(gauss_invariance_test, suff_inv, alpha=alpha_inv)
 
     # Assume unknown interventions for UT-IGSP
     setting_list = [dict(known_interventions=[]) for _ in X_pert_list]
@@ -380,7 +380,7 @@ def learn_intercellular_flows(adata: AnnData,
         {
             "flow_vars": flow_vars,
             "adjacency": bagged_A,
-            "perturbed_targets": bagged_targets,
+            "perturbed_targets": list(bagged_targets.values()),
         }
         if pert_Xs is not None
         else {"flow_vars": flow_vars, "adjacency": bagged_A}

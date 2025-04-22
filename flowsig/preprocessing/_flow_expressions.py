@@ -2,11 +2,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Literal, Any, Tuple
 import numpy as np
+from scipy.sparse import issparse
 import scanpy as sc
 from anndata import AnnData
 import pandas as pd
 from functools import lru_cache
 import pathlib
+from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 
@@ -19,21 +21,19 @@ class FlowSigConfig:
 
 @lru_cache(maxsize=2)
 def _load_cellchat_tfs(model_organism: str) -> pd.DataFrame:
-    path = pathlib.Path(__file__).with_name(
-        f'../data/cellchat_interactions_tfs_{model_organism}.csv.gz'
-    )
-    return pd.read_csv(path, index_col=0)
+    data_file = f"cellchat_interactions_tfs_{model_organism}.csv.gz"
+    return Path(__file__).parent / ".." / "data" / data_file
 
 def _safe_get(adata: AnnData, gene: str) -> Optional[np.ndarray]:
     try:
-        return adata[:, gene].X.A1          
+        return (adata[:, gene].X.toarray().ravel() if issparse(adata.X) else np.ravel(adata[:, gene].X))          
     except KeyError:                        
         return None
 
 def _dense_expr(adata: AnnData, genes: list[str]|str) -> np.ndarray:
 
     if isinstance(genes, str):
-        return adata[:, genes].X.A1
+        return (adata[:, genes].X.toarray().ravel() if issparse(adata.X) else np.ravel(adata[:, genes].X))          
     else:
         return adata[:, genes].X.toarray()      
     
@@ -59,15 +59,15 @@ def _assemble_flows(
     )
 
     flow_var_info = pd.DataFrame({
-        'Type': adata_outflow.var['type']
-                  .append(adata_inflow.var['type'])
-                  .append(adata_gem.var['type']),
-        'Downstream_TF': adata_outflow.var['downstream_tfs']
-                           .append(adata_inflow.var['downstream_tfs'])
-                           .append(adata_gem.var['downstream_tfs']),
-        'Interaction': adata_outflow.var['interactions']
-                         .append(adata_inflow.var['interactions'])
-                         .append(adata_gem.var['interactions']),
+        'Type': pd.concat([adata_outflow.var['Type'], 
+                          adata_inflow.var['Type'],
+                            adata_gem.var['Type']]),
+        'Downstream_TF': pd.concat([adata_outflow.var['Downstream_TF'],
+                                    adata_inflow.var['Downstream_TF'],
+                                    adata_gem.var['Downstream_TF']]),
+        'Interaction': pd.concat([adata_outflow.var['Interaction'],
+                                    adata_inflow.var['Interaction'],
+                                    adata_gem.var['Interaction']]),
     }, index=pd.Index(flow_variables))
 
     adata.obsm[config.flowsig_expr_key] = flow_expressions
@@ -89,9 +89,9 @@ def construct_gem_expressions(adata: AnnData,
 
     adata_gem = AnnData(X=gem_expressions)
     adata_gem.var.index = pd.Index(flow_gems)
-    adata_gem.var['downstream_tfs'] = '' # For housekeeping for later
-    adata_gem.var['type'] = 'module' # Define variable types
-    adata_gem.var['interactions'] = '' # For housekeeping for later
+    adata_gem.var['Downstream_TF'] = '' # For housekeeping for later
+    adata_gem.var['Type'] = 'module' # Define variable types
+    adata_gem.var['Interaction'] = '' # For housekeeping for later
 
     if scale_gem_expr:
 
@@ -111,11 +111,11 @@ def construct_inflow_signals_cellchat(adata: AnnData,
                                     cellchat_output_key: str, 
                                     model_organism: Literal['human', 'mouse'] = 'human',
                                     tfs_to_use: Optional[list[str]] = None,
-                                    method: Literal['v1', 'v2'] = 'v1') -> Tuple[AnnData, list[str]]:
+                                    construction: Literal['v1', 'v2'] = 'v1') -> Tuple[AnnData, list[str]]:
 
     vars_set = set(adata.var_names)  
 
-    cellchat_interactions_and_tfs = _load_cellchat_tfs(model_organism)
+    cellchat_interactions_and_tfs = pd.read_csv(_load_cellchat_tfs(model_organism).resolve(), index_col=0)
 
     if cellchat_output_key not in adata.uns:
         raise KeyError(f"'{cellchat_output_key}' not found in adata.uns")
@@ -188,11 +188,11 @@ def construct_inflow_signals_cellchat(adata: AnnData,
     receptor_indices = {rec: i for i, rec in enumerate(unique_receptors)}
 
     unique_tfs = sorted({tf for tfs in unique_inflow_vars_and_tfs.values() for tf in tfs})
-    tfs_expression = _dense_expr(adata, unique_tfs)
+    tfs_expressions = _dense_expr(adata, unique_tfs)
     tf_indices = {tf: i for i, tf in enumerate(unique_tfs)}
 
     inflow_expressions = np.empty((adata.n_obs, len(inflow_vars)))
-    if method == 'v1': # The original way we did it
+    if construction == 'v1': # The original way we did it
 
         # Take the log to speed up when we take the geometric mean
         log_receptor_expr = np.log(receptor_expression + 1e-12)
@@ -211,7 +211,7 @@ def construct_inflow_signals_cellchat(adata: AnnData,
 
                 tf_cols = [tf_indices[tf] for tf in inflow_downstream_tfs]
                                                                 
-                inflow_expressions[:, k] *= tfs_expression[:, tf_cols].mean(axis=1)
+                inflow_expressions[:, k] *= tfs_expressions[:, tf_cols].mean(axis=1)
     
     else: # New method to simplify everything
 
@@ -226,8 +226,7 @@ def construct_inflow_signals_cellchat(adata: AnnData,
             # Take the maximum because you just need SOME activation
             inflow_downstream_tfs = unique_inflow_vars_and_tfs[receptor]
             tf_cols = [tf_indices[tf] for tf in inflow_downstream_tfs] if len(inflow_downstream_tfs) != 0 else None
-
-            tf_expression = tf_expression[:, tf_cols].max(axis=1) if tf_cols is not None else np.ones_like(rec_expression)
+            tf_expression = tfs_expressions[:, tf_cols].max(axis=1) if tf_cols is not None else np.ones_like(rec_expression)
 
             # More  numerically stable way of taking geometric mean 
             inflow_expressions[:, k] = np.sqrt(np.multiply(rec_expression, tf_expression))
@@ -241,9 +240,9 @@ def construct_inflow_signals_cellchat(adata: AnnData,
         
     adata_inflow = AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
-    adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
-    adata_inflow.var['type'] = 'inflow' # Define variable types
-    adata_inflow.var['interactions'] = inflow_interactions
+    adata_inflow.var['Downstream_TF'] = inflow_downstream_tfs
+    adata_inflow.var['Type'] = 'inflow' # Define variable types
+    adata_inflow.var['Interaction'] = inflow_interactions
 
     return adata_inflow, inflow_vars
 
@@ -282,15 +281,15 @@ def construct_outflow_signals_cellchat(adata: AnnData,
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
-    adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
-    adata_outflow.var['type'] = 'outflow' # Define variable types
+    adata_outflow.var['Downstream_TF'] = '' # For housekeeping for later
+    adata_outflow.var['Type'] = 'outflow' # Define variable types
 
     relevant_interactions_of_ligands = []
     for ligand in outflow_vars:
         interactions_of_ligand = relevant_interactions[ligand]
         relevant_interactions_of_ligands.append('/'.join(interactions_of_ligand))
         
-    adata_outflow.var['interactions'] = relevant_interactions_of_ligands # Define variable types
+    adata_outflow.var['Interaction'] = relevant_interactions_of_ligands # Define variable types
 
     return adata_outflow, outflow_vars
 
@@ -299,7 +298,7 @@ def construct_flows_from_cellchat(adata: AnnData,
                                 model_organism: Literal['human', 'mouse'] = 'human',
                                 tfs_to_use: Optional[list[str]] = None,
                                 config: FlowSigConfig = FlowSigConfig(),
-                                method: Literal['v1', 'v2'] = 'v1') -> None:
+                                construction: Literal['v1', 'v2'] = 'v1') -> None:
 
     model_organisms = ['human', 'mouse']
 
@@ -312,7 +311,7 @@ def construct_flows_from_cellchat(adata: AnnData,
     # Define the expression
     adata_outflow, outflow_vars = construct_outflow_signals_cellchat(adata, cellchat_output_key)
 
-    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism, tfs_to_use, method)
+    adata_inflow, inflow_vars = construct_inflow_signals_cellchat(adata, cellchat_output_key, model_organism, tfs_to_use, construction)
 
     adata_gem, flow_gem_vars = construct_gem_expressions(adata, config.gem_expr_key, config.scale_gem_expr)
 
@@ -385,9 +384,9 @@ def construct_inflow_signals_cellphonedb(adata: AnnData,
         
     adata_inflow = AnnData(X=inflow_expressions_adjusted)
     adata_inflow.var.index = pd.Index(inflow_vars)
-    adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
-    adata_inflow.var['type'] = 'inflow' # Define variable types
-    adata_inflow.var['interactions'] = inflow_interactions
+    adata_inflow.var['Downstream_TF'] = inflow_downstream_tfs
+    adata_inflow.var['Type'] = 'inflow' # Define variable types
+    adata_inflow.var['Interaction'] = inflow_interactions
 
     return adata_inflow, inflow_vars
 
@@ -419,15 +418,15 @@ def construct_outflow_signals_cellphonedb(adata: AnnData,
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
-    adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
-    adata_outflow.var['type'] = 'outflow' # Define variable types
+    adata_outflow.var['Downstream_TF'] = '' # For housekeeping for later
+    adata_outflow.var['Type'] = 'outflow' # Define variable types
 
     relevant_interactions_of_ligands = []
     for ligand in outflow_vars:
         interactions_of_ligand = relevant_interactions[ligand]
         relevant_interactions_of_ligands.append('/'.join(interactions_of_ligand))
         
-    adata_outflow.var['interactions'] = relevant_interactions_of_ligands # Define variable types
+    adata_outflow.var['Interaction'] = relevant_interactions_of_ligands # Define variable types
 
     return adata_outflow, outflow_vars
 
@@ -557,9 +556,9 @@ def construct_inflow_signals_liana(adata: AnnData,
             
         adata_inflow = AnnData(X=inflow_expressions_adjusted)
         adata_inflow.var.index = pd.Index(inflow_vars)
-        adata_inflow.var['downstream_tfs'] = inflow_downstream_tfs
-        adata_inflow.var['type'] = 'inflow' # Define variable types
-        adata_inflow.var['interactions'] = inflow_interactions
+        adata_inflow.var['Downstream_TF'] = inflow_downstream_tfs
+        adata_inflow.var['Type'] = 'inflow' # Define variable types
+        adata_inflow.var['Interaction'] = inflow_interactions
 
         return adata_inflow, inflow_vars
     
@@ -610,15 +609,15 @@ def construct_outflow_signals_liana(adata: AnnData,
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
-    adata_outflow.var['downstream_tfs'] = '' # For housekeeping for later
-    adata_outflow.var['type'] = 'outflow' # Define variable types
+    adata_outflow.var['Downstream_TF'] = '' # For housekeeping for later
+    adata_outflow.var['Type'] = 'outflow' # Define variable types
 
     relevant_interactions_of_ligands = []
     for ligand in outflow_vars:
         interactions_of_ligand = relevant_interactions[ligand]
         relevant_interactions_of_ligands.append('/'.join(interactions_of_ligand))
         
-    adata_outflow.var['interactions'] = relevant_interactions_of_ligands # Define variable types
+    adata_outflow.var['Interaction'] = relevant_interactions_of_ligands # Define variable types
 
     return adata_outflow, outflow_vars
    
@@ -661,9 +660,9 @@ def construct_inflow_signals_commot(adata: AnnData,
 
     adata_inflow = AnnData(X=inflow_expressions)
     adata_inflow.var.index = pd.Index(inflow_vars)
-    adata_inflow.var['downstream_tfs'] = ''
-    adata_inflow.var['type'] = 'inflow' 
-    adata_inflow.var['interactions'] = inflow_interactions
+    adata_inflow.var['Downstream_TF'] = ''
+    adata_inflow.var['Type'] = 'inflow' 
+    adata_inflow.var['Interaction'] = inflow_interactions
 
     return adata_inflow, inflow_vars
 
@@ -688,9 +687,9 @@ def construct_outflow_signals_commot(adata: AnnData,
 
     adata_outflow = AnnData(X=outflow_expressions)
     adata_outflow.var.index = pd.Index(outflow_vars)
-    adata_outflow.var['downstream_tfs'] = ''
-    adata_outflow.var['type'] = 'outflow' 
-    adata_outflow.var['interactions'] = outflow_interactions
+    adata_outflow.var['Downstream_TF'] = ''
+    adata_outflow.var['Type'] = 'outflow' 
+    adata_outflow.var['Interaction'] = outflow_interactions
 
     return adata_outflow, outflow_vars
 

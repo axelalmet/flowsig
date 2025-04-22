@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple, Optional, Sequence
+from typing import Tuple, Optional, Sequence, Literal
 import numpy as np
 import scanpy as sc
 from anndata import AnnData
@@ -22,26 +22,59 @@ def _make_flow_adata(
     if flowsig_network_key not in adata.uns:
         raise ValueError(f"Could not find {flowsig_network_key} in adata.uns")
 
-    X = adata.obsm[flowsig_network_key]
-    if var_mask is not None:
-        X = X[:, var_mask]
+    X = adata.obsm[flowsig_expr_key]
 
     adata_flow = AnnData(X=X, obs=adata.obs.copy())
     adata_flow.var = adata.uns[flowsig_network_key]["flow_var_info"].copy()
+
     if var_mask is not None:
-        adata_flow.var = adata_flow.var.iloc[var_mask]
+        adata_flow = adata_flow[:, var_mask]
+        
     return adata_flow
 
+def _log_fold_cohens(adata: AnnData,
+                     condition_key: str,
+                     group1: str,
+                     group2: str) -> pd.DataFrame:
+    """Calculate a standardised log-fold change somewhat equivalent to Cohen's d between group1 and group2.
+    This is adapted from the scoreMarkers function in scran (see here: https://rdrr.io/github/MarioniLab/scran/man/scoreMarkers.html).
+    """
+
+    # Calculate the mean and standard deviation for each group
+    expr_group1 = adata[adata.obs[condition_key] == group1].X
+    expr_group2 = adata[adata.obs[condition_key] == group2].X
+    mean1 = expr_group1.mean(axis=0)
+    mean2 = expr_group2.mean(axis=0)
+    std1 = expr_group1.std(axis=0)
+    std2 = expr_group2.std(axis=0)
+
+    log_means_diff = mean1 - mean2
+    lfc_cohen = log_means_diff / ( 0.5 * (std1**2.0 + std2**2.0) )** 0.5
+    lfc_cohens_results = pd.DataFrame(data=lfc_cohen, index=adata.var_names, columns=['logfoldchanges_cohen'])
+
+    return lfc_cohens_results
+
 def _select_vars_union(
-    rank_df_per_group: dict[str, pd.DataFrame],
-    logfc_thr: float,
-    qval_thr: float,
+    logfoldchanges_per_group: dict[str, pd.DataFrame],
+    logfc_threshold: float,
+    qval_threshold: float = None,
+    construction: Literal['v1', 'v2'] = 'v1'
 ) -> list[str]:
     """Return union of gene names passing both thresholds in any group."""
     selected: set[str] = set()
-    for df in rank_df_per_group.values():
-        keep = (df["pvals_adj"] < qval_thr) & (np.abs(df["logfoldchanges"]) > logfc_thr)
-        selected |= set(df.loc[keep, "names"]) # this is equivalent to selected = selected | set(df.loc[keep, "names"])
+
+    if construction == 'v1':
+        for df in logfoldchanges_per_group.values():
+            keep = (np.abs(df["logfoldchanges"]) > logfc_threshold) & (df["pvals_adj"] < qval_threshold)
+
+            selected |= set(df.loc[keep, "names"]) # this is equivalent to selected = selected | set(df.loc[keep, "names"])
+
+    else:
+        for df in logfoldchanges_per_group.values():
+            keep = (np.abs(df["logfoldchanges_cohen"]) > logfc_threshold)
+
+            selected |= set(df.index[keep])
+
     return list(selected)
 
 def subset_for_flow_type(
@@ -96,12 +129,16 @@ def determine_differentially_flowing_vars(
     control: str,
     *,
     config: FlowSigConfig = FlowSigConfig(),
-    logfc_thr: float = 0.5,
-    qval_thr: float = 0.05,
-    method: str = 'v1'
+    logfc_threshold: float = None,
+    qval_threshold: float = None,
+    construction: Literal['v1', 'v2'] = 'v1'
 ) -> None:
     
-    flowsig_network_key = config.flowsig_expr_key
+    flowsig_expr_key = config.flowsig_expr_key
+    if flowsig_expr_key not in adata.obsm:
+        raise ValueError(f"Could not find {flowsig_expr_key} in adata.obsm")
+
+    flowsig_network_key = config.flowsig_network_key
     if flowsig_network_key not in adata.uns:
         raise ValueError(f"Could not find {flowsig_network_key} in adata.uns")
 
@@ -114,22 +151,35 @@ def determine_differentially_flowing_vars(
     ad_in  = _make_flow_adata(adata, config, inflow_mask)
     ad_out = _make_flow_adata(adata, config, outflow_mask)
 
-    for ad in (ad_in, ad_out):
-        ad.uns["log1p"] = {"base": None}  # prevent scanpy warning
-        sc.tl.rank_genes_groups(ad, groupby=condition_key, method="wilcoxon")
+    vars_keep = None
 
-    def _collect(ad) -> list[str]:
-        pert_cond = {cond: sc.get.rank_genes_groups_df(ad, group=cond) for cond in pert_conds}
-        return _select_vars_union(pert_cond, logfc_thr, qval_thr)
+    def _collect(ad, construction) -> list[str]:
+            
+        pert_cond = {}
+        if construction == 'v1':
+            pert_cond = {cond: sc.get.rank_genes_groups_df(ad, group=cond) for cond in pert_conds}
+        
+        else: # Just select based on logfc_thr for logfoldchanges_cohen
+            pert_cond = {cond: _log_fold_cohens(ad, condition_key=condition_key, group1=cond, group2=control) for cond in pert_conds}
 
-    vars_keep = _collect(ad_in) + _collect(ad_out) + info[info["Type"] == "module"].index.tolist()
+        return _select_vars_union(pert_cond, logfc_threshold, qval_threshold, construction)
+
+    if construction == 'v1':
+
+        for ad in (ad_in, ad_out):
+            ad.uns["log1p"] = {"base": None}  # prevent scanpy warning
+            sc.tl.rank_genes_groups(ad, groupby=condition_key, method="wilcoxon")
+
+    vars_keep = _collect(ad_in, construction) + _collect(ad_out, construction) + info[info["Type"] == "module"].index.tolist()
+
+
     filter_flow_vars(adata, vars_keep, config)
 
 def determine_spatially_flowing_vars(
     adata: AnnData,
     *,
     config: FlowSigConfig = FlowSigConfig(),
-    moran_thr: float = 0.1,
+    moran_threshold: float = 0.1,
     coord_type: str = "grid",
     n_neighs: int = 6,
     library_key: str | None = None,
@@ -161,7 +211,7 @@ def determine_spatially_flowing_vars(
 
     spatially_varying_vars = []
     for var_type, ad in adatas.items():
-        spatially_varying_vars.extend(ad.uns["moranI"].query("I > @moran_thr").index)
+        spatially_varying_vars.extend(ad.uns["moranI"].query("I > @moran_threshold").index)
 
     vars_keep = spatially_varying_vars + info[info["Type"] == "module"].index.tolist()
     filter_flow_vars(adata, vars_keep, config)

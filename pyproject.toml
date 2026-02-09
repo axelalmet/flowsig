@@ -63,6 +63,7 @@ sphinx = "^7.0"
 myst-parser = "^3.0.1"   # appears in your tree :contentReference[oaicite:4]{index=4}
 furo = "^2024.8.6"       # appears in your tree :contentReference[oaicite:5]{index=5}
 sphinx-autodoc-typehints = "^2.0"
+shibuya = "^2026.1.9"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

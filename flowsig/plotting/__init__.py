@@ -1,1 +1,0 @@
-from ._plotting import plot_differentially_flowing_signals, plot_intercellular_flows

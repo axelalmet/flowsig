@@ -9,12 +9,6 @@ build:
       - python -m pip install -U pip
       - python -m pip install -r docs/requirements.txt
       - python -m pip install -e . --no-deps
-      
+
 sphinx:
   configuration: docs/source/conf.py
-
-python:
-  install:
-    - requirements: docs/requirements.txt
-    - method: pip
-      path: .

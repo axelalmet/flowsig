@@ -33,11 +33,12 @@ extensions = [
     "myst_parser",                    # allow Markdown pages
 ]
 
+autosummary_generate = True
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # Autodoc / autosummary
-autosummary_generate = True
 autodoc_default_options = {
     "members": True,
     "undoc-members": False,
@@ -81,3 +82,11 @@ intersphinx_mapping = {
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "shibuya"
+
+def _skip_private(app, what, name, obj, skip, options):
+    if name.startswith("_"):
+        return True
+    return skip
+
+def setup(app):
+    app.connect("autodoc-skip-member", _skip_private)

@@ -2,3 +2,22 @@ from ._flow_expressions import FlowSigConfig, construct_flows_from_cellchat, con
 from ._flow_preprocessing import subset_for_flow_type, filter_flow_vars, determine_differentially_flowing_vars, determine_spatially_flowing_vars, determine_informative_variables
 from ._gem_construction import construct_gems_using_pyliger, construct_gems_using_nsf, construct_gems_using_nmf, construct_gems_using_cnmf
 from ._spatial_blocking import construct_spatial_blocks
+
+
+__all__ = [
+    "construct_flows_from_cellchat",
+    "construct_flows_from_commot",
+    "construct_flows_from_cellphonedb",
+    "construct_flows_from_liana",
+    "construct_flow_expressions",
+    "subset_for_flow_type",
+    "filter_flow_vars",
+    "determine_differentially_flowing_vars",
+    "determine_spatially_flowing_vars",
+    "determine_informative_variables",
+    "construct_gems_using_pyliger",
+    "construct_gems_using_nsf",
+    "construct_gems_using_nmf",
+    "construct_gems_using_cnmf",
+    "construct_spatial_blocks"
+]

@@ -3,7 +3,6 @@ Welcome to FlowSig's documentation!
 
 **FlowSig** A python package to infer communication-driven intercellular flows from single-cell and spatial transcriptomics.
 
-## Installation
 To install FlowSig, there are two approaches you can try:
 
   

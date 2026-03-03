@@ -126,16 +126,14 @@ data-aria-dark="Switch to auto color mode">
 <p><strong>FlowSig</strong> A python package to infer communication-driven intercellular flows from single-cell and spatial transcriptomics.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<p>The easiest way to currently install FlowSig is to create a virtual environment and then install within it.:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="o">..</span> <span class="n">code</span><span class="o">-</span><span class="n">block</span><span class="p">::</span> <span class="n">bash</span>
+<p>The easiest way to currently install FlowSig is to create a virtual environment and then install within it.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="c1"># Create the virtual environment</span>
+</span><span data-line="2">python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>flowsigenv
+</span><span data-line="3">
+</span><span data-line="4"><span class="c1"># Activate the virtual environment</span>
+</span><span data-line="5"><span class="nb">source</span><span class="w"> </span>flowsigenv/bin/activate
 </span></pre></div>
 </div>
-<blockquote>
-<div><p># Create the virtual environment
-python3 -m venv flowsigenv</p>
-<p># Activate the virtual environment
-source flowsigenv/bin/activate</p>
-</div></blockquote>
 <p><strong>N.B. make sure you’re using at least Python 3.11!</strong></p>
 <ol class="arabic simple">
 <li><p><strong>First approach:</strong> pip install</p></li>

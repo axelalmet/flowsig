@@ -6,7 +6,7 @@ Welcome to FlowSig's documentation!
 Installation
 ------------
 
-The easiest way to currently install FlowSig is to create a virtual environment and then install within it.::
+The easiest way to currently install FlowSig is to create a virtual environment and then install within it.
 
 .. code-block:: bash
 
@@ -28,7 +28,7 @@ The easiest way to currently install FlowSig is to create a virtual environment 
 2. **Backup approoach:** install directly from GitHub repository.
 
 .. code-block:: bash
-   
+
    # Clone the repository
    git clone https://github.com/axelalmet/flowsig.git
    cd ./flowsig/

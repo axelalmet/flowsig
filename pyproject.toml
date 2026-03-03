@@ -17,12 +17,13 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.11,<3.14"
 
 scanpy = ">=1.11.0,<2.0.0"
 squidpy = ">=1.6.5,<2.0.0"
@@ -48,9 +49,7 @@ tf-keras = ">=2.19.0,<3.0.0"
 dm-tree = ">=0.1.9,<0.2.0"
 cnmf = ">=1.7.0,<2.0.0"
 pyliger = ">=0.2.4,<0.3.0"
-
-# VCS dependency (pip will fetch from GitHub during install)
-spatial-factorization = { git = "https://github.com/willtownes/spatial-factorization-py.git" }
+mofaflex = "^0.1.0.post1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"

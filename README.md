@@ -255,8 +255,7 @@ We now construct gene expression modules (GEMs) from the unnormalised count data
 fs.pp.construct_gems_using_nsf(adata,
                             n_gems = 20,
                             layer_key = 'count',
-                            n_inducing_pts = 500,
-                            length_scale = 10)
+                            n_inducing_pts = 500)
 ```
 
 ### Construct the flow expression matrices

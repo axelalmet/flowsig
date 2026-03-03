@@ -18,13 +18,13 @@ The easiest way to currently install FlowSig is to create a virtual environment 
 
 **N.B. make sure you're using at least Python 3.11!**
 
-1. **First approach: pip install**::
+1. **First approach:** pip install.
 
    .. code-block:: bash
       pip install flowsig
 
 
-2. **Backup approoach: install directly from GitHub repository**::
+2. **Backup approoach:** install directly from GitHub repository.
 
    .. code-block:: bash
       # Clone the repository

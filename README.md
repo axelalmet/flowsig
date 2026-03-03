@@ -8,24 +8,33 @@ FlowSig requires:
 
 The code used to generate all of the results in Almet et al., "Inferring pattern-driving intercellular flows from single-cell and spatial transcriptomics", can be found in another GitHub repository [here](https://github.com/axelalmet/FlowSigAnalysis_2023).
 
-**Update (April 20, 2025): I've done some re-factoring to make FlowSig more efficient in its construction of flow variables and streamlined in its implementation. Some of the function arguments are a little different and I've done my best to update the documentation and tutorials, but please let me know if you run into any issues!**
+**Update (March 3, 2026): I've edited the implementation of NSF provided by [MOFA-FLEX](https://mofaflex.readthedocs.io/stable/index.html) to calculate the spatial gene expression models instead of the original [spatial-factorization](https://github.com/willtownes/spatial-factorization-py). This should also enable FlowSig to work for multiple spatial samples.**
 
 <details>
   <summary>Installation</summary>
   
 ## Installation instructions
   
-The easiest way to currently install FlowSig is to generate a Python virtual environment and clone the repository, so that you can install all of the relevant dependencies, particularly those needed by [pyliger](https://github.com/welch-lab/pyliger) and [NSF](https://github.com/willtownes/spatial-factorization-py). We are working on making flowsig pip installable ASAP!
+The easiest way to currently install FlowSig is to generate a Python virtual environment and then run pip.
 
-**To generate a virtual environment, run the command. N.B. make sure you're using Python 3.10!**
+**N.B. make sure you're using at least Python 3.11!**
 
 ```
 # Create the virtual environment
-python3.10 -m venv flowsigenv
+python3 -m venv flowsigenv
 
 # Activate the virtual environment
 source flowsigenv/bin/activate
+```
 
+**First approach: pip install** 
+```
+pip install flowsig
+```
+
+**Backup approoach: install directly from GitHub repository**
+
+```
 # Clone the repository
 git clone https://github.com/axelalmet/flowsig.git
 cd ./flowsig/

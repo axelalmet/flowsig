@@ -2,13 +2,10 @@ from anndata import AnnData
 import numpy as np
 import pandas as pd
 import pyliger
-from tensorflow_probability import math as tm
-tfk = tm.psd_kernels
-import spatial_factorization as sf
 from typing import Optional
 from scipy.sparse import csr_matrix
-from ._townes_nsf_utils import *
 from sklearn.decomposition import NMF
+import mofaflex as mfl
 
 def construct_gems_using_pyliger(adata: AnnData,
                                 n_gems: int,
@@ -61,40 +58,79 @@ def construct_gems_using_nsf(adata: AnnData,
                             n_gems: int,
                             layer_key: str,
                             spatial_key: str = "spatial",
-                            n_inducing_pts: int = 500,
-                            length_scale: float = 10.0):
+                            sample_key: Optional[str] = None,
+                            n_inducing_pts: int = 100,
+                            weight_prior: str = 'Horseshoe',
+                            factor_prior: str = 'GP',
+                            likelihood: str = 'NegativeBinomial',
+                            kernel: str = 'Matern'):
 
     ad = adata.copy()
+    ad.X = csr_matrix(ad.layers[layer_key].copy())
+
+    group_views = {}
+    if sample_key is not None:
+        for samp in ad.obs[sample_key].unique():
+            group_views[samp] = {'rna': adata[adata.obs[sample_key] == samp].copy()}
     
-    X = ad.obsm[spatial_key]
-    # Take raw count data for NSF
-    training_fraction = 1.0
-    D,Dval = anndata_to_train_val(ad,
-                            layer=layer_key,
-                            train_frac=training_fraction,
-                            flip_yaxis=True)
-    Ntr,J = D["Y"].shape
-    Xtr = D["X"]
-    ad = adata[:Ntr,:]
-    #convert to tensorflow objects
-    Dtf = prepare_datasets_tf(D,Dval=Dval)
+    else:
+        group_views['all'] = {'rna': ad.copy()}
 
-    Z = kmeans_inducing_pts(Xtr, n_inducing_pts)
-    M = Z.shape[0] #number of inducing points
-    ker = tfk.MaternThreeHalves
+    data_opts = mfl.DataOptions(
+        scale_per_group=True,
+        covariates_obsm_key=spatial_key,
+        plot_data_overview=False,
+    )
 
-    fit = sf.SpatialFactorization(J, n_gems, Z, psd_kernel=ker, length_scale=length_scale, nonneg=True, lik="poi") # Should I change this?  
-    fit.init_loadings(D["Y"], X=Xtr, sz=D["sz"], shrinkage=0.3)
-    tro = sf.ModelTrainer(fit)
-    tro.train_model(*Dtf, status_freq=50) #about 3 mins
 
-    insf = interpret_nsf(fit,Xtr,S=100,lda_mode=False)
+    model_opts = mfl.ModelOptions(
+        n_factors=n_gems,
+        weight_prior=weight_prior,
+        factor_prior=factor_prior,
+        likelihoods=likelihood,
+        nonnegative_weights=True,
+        nonnegative_factors=True,
+    )
 
-    adata.uns['nsf_info'] = insf
-    adata.uns['nsf_info']['vars'] = adata.var_names.tolist()
+    training_opts = mfl.TrainingOptions(
+        batch_size=10000,
+        max_epochs=1000,
+        save_path=f'flowsig_spatial_gems.h5'
+    )
+
+    smooth_opts = mfl.SmoothOptions(
+        n_inducing=n_inducing_pts,
+        kernel=kernel,
+    )
+
+    model = mfl.MOFAFLEX(
+        group_views,
+        data_opts,
+        model_opts,
+        training_opts,
+        smooth_opts,
+    )
+
+    weights = model.get_weights()
+    factors = model.get_factors()
+
+    if sample_key is not None:
+        factors_joined = []
+        for samp in adata.obs['sample'].unique():
+            factors_joined.append(factors[samp])
+
+        factors_joined = pd.concat(factors_joined)
+    else:
+        factors_joined = factors['all']
+
+    factors_joined = factors_joined.loc[adata.obs_names] # Paranoia
+
+    adata.uns['nsf_info'] = {}
+    adata.uns['nsf_info']['vars'] = ad.var_names.tolist()
     adata.uns['nsf_info']['n_gems'] =  n_gems
-    adata.obsm['X_gem'] = insf['factors']
-
+    adata.obsm['X_gem'] = factors_joined
+    adata.varm['H_gem'] = weights['rna'].T
+    
 def construct_gems_using_nmf(adata: AnnData,
                                 n_gems: int,
                                 layer_key: str, 

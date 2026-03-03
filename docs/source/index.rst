@@ -7,32 +7,30 @@ Welcome to FlowSig's documentation!
 To install FlowSig, there are two approaches you can try:
 
   
-The easiest way to currently install FlowSig is to generate a Python virtual environment and then run pip.
+The easiest way to currently install FlowSig is to create a virtual environment and then install within it.::
+
+
+   # Create the virtual environment
+   python3 -m venv flowsigenv
+
+   # Activate the virtual environment
+   source flowsigenv/bin/activate
 
 **N.B. make sure you're using at least Python 3.11!**
 
-```
-# Create the virtual environment
-python3 -m venv flowsigenv
+1. **First approach: pip install**::
 
-# Activate the virtual environment
-source flowsigenv/bin/activate
-```
-
-1. **First approach: pip install**
-```
 pip install flowsig
-```
 
-2. **Backup approoach: install directly from GitHub repository**
 
-```
-# Clone the repository
-git clone https://github.com/axelalmet/flowsig.git
-cd ./flowsig/
+2. **Backup approoach: install directly from GitHub repository**::
 
-# Install
-pip3 install .
+   # Clone the repository
+   git clone https://github.com/axelalmet/flowsig.git
+   cd ./flowsig/
+
+   # Install
+   pip3 install .
 
 .. toctree::
    :maxdepth: 2

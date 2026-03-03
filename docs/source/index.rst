@@ -3,11 +3,12 @@ Welcome to FlowSig's documentation!
 
 **FlowSig** A python package to infer communication-driven intercellular flows from single-cell and spatial transcriptomics.
 
-To install FlowSig, there are two approaches you can try:
+Installation
+------------
 
-  
 The easiest way to currently install FlowSig is to create a virtual environment and then install within it.::
 
+.. code-block:: bash
 
    # Create the virtual environment
    python3 -m venv flowsigenv
@@ -19,17 +20,19 @@ The easiest way to currently install FlowSig is to create a virtual environment 
 
 1. **First approach: pip install**::
 
-pip install flowsig
+   .. code-block:: bash
+      pip install flowsig
 
 
 2. **Backup approoach: install directly from GitHub repository**::
 
-   # Clone the repository
-   git clone https://github.com/axelalmet/flowsig.git
-   cd ./flowsig/
+   .. code-block:: bash
+      # Clone the repository
+      git clone https://github.com/axelalmet/flowsig.git
+      cd ./flowsig/
 
-   # Install
-   pip3 install .
+      # Install
+      pip3 install .
 
 .. toctree::
    :maxdepth: 2

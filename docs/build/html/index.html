@@ -87,7 +87,12 @@ data-aria-dark="Switch to auto color mode">
     <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
       <i class="i-lucide close"></i>
     </button>
-    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+</ul>
+</li>
+</ul>
+</div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
   </aside>
   <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
   <main class="sy-main w-full max-sm:max-w-full print:pt-6">
@@ -119,6 +124,41 @@ data-aria-dark="Switch to auto color mode">
           <section id="welcome-to-flowsig-s-documentation">
 <h1>Welcome to FlowSig’s documentation!<a class="headerlink" href="#welcome-to-flowsig-s-documentation" title="Link to this heading">¶</a></h1>
 <p><strong>FlowSig</strong> A python package to infer communication-driven intercellular flows from single-cell and spatial transcriptomics.</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>The easiest way to currently install FlowSig is to create a virtual environment and then install within it.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="o">..</span> <span class="n">code</span><span class="o">-</span><span class="n">block</span><span class="p">::</span> <span class="n">bash</span>
+</span></pre></div>
+</div>
+<blockquote>
+<div><p># Create the virtual environment
+python3 -m venv flowsigenv</p>
+<p># Activate the virtual environment
+source flowsigenv/bin/activate</p>
+</div></blockquote>
+<p><strong>N.B. make sure you’re using at least Python 3.11!</strong></p>
+<ol class="arabic">
+<li><p><strong>First approach: pip install</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="o">..</span> <span class="n">code</span><span class="o">-</span><span class="n">block</span><span class="p">::</span> <span class="n">bash</span>
+</span></pre></div>
+</div>
+<blockquote>
+<div><p>pip install flowsig</p>
+</div></blockquote>
+</li>
+<li><p><strong>Backup approoach: install directly from GitHub repository</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span data-line="1"><span class="o">..</span> <span class="n">code</span><span class="o">-</span><span class="n">block</span><span class="p">::</span> <span class="n">bash</span>
+</span></pre></div>
+</div>
+<blockquote>
+<div><p># Clone the repository
+git clone <a class="reference external" href="https://github.com/axelalmet/flowsig.git">https://github.com/axelalmet/flowsig.git</a>
+cd ./flowsig/</p>
+<p># Install
+pip3 install .</p>
+</div></blockquote>
+</li>
+</ol>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
@@ -147,6 +187,7 @@ data-aria-dark="Switch to auto color mode">
 <li class="toctree-l1"><a class="reference external" href="https://github.com/axelalmet/flowsig">GitHub</a></li>
 </ul>
 </div>
+</section>
 </section>
 
         </article><button class="back-to-top" type="button">

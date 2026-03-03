@@ -24,30 +24,39 @@ except Exception:
 
 # -- General configuration ---------------------------------------------------
 extensions = [
-    "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",            # Google/Numpy style docstrings
-    "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",       # show type hints nicely
     "myst_parser",                    # allow Markdown pages
-]
-
-autosummary_generate = True
+    "autoapi.extension"
+]     
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-# Autodoc / autosummary
-autodoc_default_options = {
-    "members": True,
-    "undoc-members": False,
-    "show-inheritance": True,
-}
-autodoc_typehints = "description"
+# -- AutoAPI configuration ---------------------------------------------------
+autoapi_type = "python"
+autoapi_dirs = ["../../src/flowsig"]   # path from docs/source to your package
+autoapi_root = "autoapi"
+autoapi_packages = ["flowsig"]
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+    "imported-members",
+]
+autoapi_ignore = [
+    "*/_version*",
+    "*/tests/*",
+    "*example_script*",          # ignore example scripts
+    "*-checkpoint*",             # ignore Jupyter checkpoint artifacts
+]
+autoapi_keep_files = True              # keep generated .rst for inspection
+autoapi_python_class_content = "both"  # show class docstring + __init__
 
-# IMPORTANT: your stack is heavy. Mock imports so docs build without installing
-# TensorFlow/scanpy/squidpy/geopandas/etc.
+# Autodoc / autosummary
 autodoc_mock_imports = [
     "tensorflow",
     "tensorflow_probability",
@@ -59,7 +68,7 @@ autodoc_mock_imports = [
     "pyliger",
     "cnmf",
     "dm_tree",
-    "spatial_factorization",
+    "mofaflex",
     "causaldag",
     "graphical_models",
     "graphical_model_learning",
@@ -83,10 +92,18 @@ intersphinx_mapping = {
 # -- Options for HTML output -------------------------------------------------
 html_theme = "shibuya"
 
-def _skip_private(app, what, name, obj, skip, options):
-    if name.startswith("_"):
+# -- AutoAPI skip handler (replaces the old autodoc one) ---------------------
+def _autoapi_skip_member(app, what, name, obj, skip, options):
+    """Keep public API visible, hide private implementation details."""
+    short_name = name.split(".")[-1]
+    # Skip private functions/classes/attributes (but NOT private modules)
+    if what in ("function", "method", "attribute", "property", "class"):
+        if short_name.startswith("_") and not short_name.startswith("__"):
+            return True
+    # Skip dunder methods except __init__
+    if short_name.startswith("__") and short_name not in ("__init__",):
         return True
     return skip
 
 def setup(app):
-    app.connect("autodoc-skip-member", _skip_private)
+    app.connect("autoapi-skip-member", _autoapi_skip_member)

@@ -1,21 +1,21 @@
-.. flowsig documentation master file, created by
-   sphinx-quickstart on Fri Jul  7 14:47:42 2023.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Welcome to flowsig's documentation!
+Welcome to FlowSig's documentation!
 ===================================
+
+**FlowSig** A python package to infer communication-driven intercellular flows from single-cell and spatial transcriptomics.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Tutorials
 
-   api
+   tutorials/index
 
-Indices and tables
-==================
+.. toctree::
+   :maxdepth: 3
+   :caption: API Reference
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   autoapi/flowsig/index
 
+.. toctree::
+   :caption: Links
+
+   GitHub <https://github.com/axelalmet/flowsig>

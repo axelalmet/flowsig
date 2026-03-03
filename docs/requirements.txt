@@ -3,5 +3,4 @@ furo
 myst-parser
 sphinx-autodoc-typehints
 shibuya
-sphinx-shibuya
 sphinx-autoapi

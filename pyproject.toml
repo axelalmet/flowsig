@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flowsig"
-version = "0.4.0"
+version = "0.4.2"
 description = "Infer dependent intercellular communication from single-cell and spatial transcriptomics data."
 authors = ["Axel A. Almet"]
 license = "MIT"
@@ -30,7 +30,7 @@ squidpy = ">=1.6.5,<2.0.0"
 numpy = ">=1.26.0,<2.2.0"                 # aligns with TF 2.19.x requirements :contentReference[oaicite:1]{index=1}
 scipy = ">=1.10.1,<2.0.0"
 pandas = ">=2.2.3,<3.0.0"
-anndata = ">=0.11.3,<0.12.0"
+anndata = ">0.12.0"
 networkx = ">=3.4.2,<4.0.0"
 joblib = ">=1.4.2,<2.0.0"
 matplotlib = ">=3.10.1,<4.0.0"
@@ -48,7 +48,6 @@ tf-keras = ">=2.19.0,<3.0.0"
 
 dm-tree = ">=0.1.9,<0.2.0"
 cnmf = ">=1.7.0,<2.0.0"
-pyliger = ">=0.2.4,<0.3.0"
 mofaflex = "^0.1.0.post1"
 
 [tool.poetry.group.dev.dependencies]

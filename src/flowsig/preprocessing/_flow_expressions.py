@@ -75,14 +75,14 @@ def _assemble_flows(
 
 def construct_gem_expressions(adata: AnnData,
                             gem_expr_key: str = 'X_gem',
-                            scale_gem_expr: bool = True,
-                            layer_key: Optional[str] = None) -> Tuple[AnnData, list[str]]:
+                            scale_gem_expr: bool = False) -> Tuple[AnnData, list[str]]:
     
     gem_expressions = adata.obsm[gem_expr_key]
 
     # Scale so that the GEM memberships sum to 1 per cell
-    gem_sum = gem_expressions.sum(axis=0)
-    gem_expressions = gem_expressions / gem_sum
+    if scale_gem_expr:
+        gem_sum = gem_expressions.sum(axis=1)
+        gem_expressions = gem_expressions / gem_sum
     
     num_gems = gem_expressions.shape[1]
     flow_gems = ['GEM-' + str(i + 1) for i in range(num_gems)]
@@ -92,18 +92,6 @@ def construct_gem_expressions(adata: AnnData,
     adata_gem.var['Downstream_TF'] = '' # For housekeeping for later
     adata_gem.var['Type'] = 'module' # Define variable types
     adata_gem.var['Interaction'] = '' # For housekeeping for later
-
-    if scale_gem_expr:
-
-        if layer_key is not None:
-
-            scale_factor = adata.layers[layer_key].copy().sum(1).mean()
-
-        else:
-            scale_factor = np.expm1(adata.X).sum(1).mean()
-
-        adata_gem.X *= scale_factor
-        sc.pp.log1p(adata_gem)
 
     return adata_gem, flow_gems
 

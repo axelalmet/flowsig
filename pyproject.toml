@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flowsig"
-version = "0.4.2"
+version = "0.4.3"
 description = "Infer dependent intercellular communication from single-cell and spatial transcriptomics data."
 authors = ["Axel A. Almet"]
 license = "MIT"

@@ -308,9 +308,13 @@ def learn_intercellular_flows(adata: AnnData,
 
     # Use GSP if no perturbation specified
     if condition_key is None:
-        ctrl_X, pert_Xs = X_all, None
-        ctrl_blocks, pert_blocks = blocks_all, None
-        learner = _learn_gsp 
+        if use_spatial:
+            ctrl_X, pert_Xs = X_all, None
+            ctrl_blocks, pert_blocks = blocks_all, None
+            learner = _learn_gsp 
+        else:
+            ctrl_X, pert_Xs = X_all, None
+            learner = _learn_gsp
     # Use UT-IGSP for ctrl vs. perturbed
     else:
         if control is None:

@@ -355,7 +355,7 @@ def learn_intercellular_flows(adata: AnnData,
 
     print(f"Starting {n_bootstraps} bootstraps on {n_jobs} cores …")
     t0 = time.perf_counter()
-    with Parallel(n_jobs=n_jobs, prefer="processes") as pool, tqdm(total=n_bootstraps) as bar:
+    with Parallel(n_jobs=n_jobs, prefer="processes", return_as="generator_unordered") as pool, tqdm(total=n_bootstraps) as bar:
         results = []
         for res in pool(delayed(BootstrapPlan.run)(p) for p in plans):
             results.append(res)

@@ -82,7 +82,7 @@ def construct_gem_expressions(adata: AnnData,
     # Scale so that the GEM memberships sum to 1 per cell
     if scale_gem_expr:
         gem_sum = gem_expressions.sum(axis=1)
-        gem_expressions = gem_expressions / gem_sum
+        gem_expressions = gem_expressions / gem_sum[:, None]
     
     num_gems = gem_expressions.shape[1]
     flow_gems = ['GEM-' + str(i + 1) for i in range(num_gems)]

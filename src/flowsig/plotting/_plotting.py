@@ -224,7 +224,7 @@ def plot_intercellular_flows(adata: sc.AnnData,
 
     # We will sort the inflow vars etc now
     inflow_vars = sorted(inflow_vars)
-    module_vars = sorted(module_vars, key=lambda x: int(x[4:])) # Assumption is that all module vars are written like 'GEM-1', etc.
+    module_vars = sorted(module_vars, key=lambda x: int(x.split('-')[1])) # Assumption is that all module vars are written like 'GEM-1', etc.
     # module_vars = sorted(module_vars) # Assumption is that all module vars are written like 'GEM-1', etc.
 
     outflow_vars = sorted(outflow_vars)

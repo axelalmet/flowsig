@@ -82,6 +82,35 @@ def apply_biological_flow(
     validated = _filter_edges_by_weight(cpdag, adjacency, biological, 0.0)
     flowsig_network[f"{adjacency_key}_{validated_key}"] = validated
 
+
+def apply_biological_cre_flow(
+    adata: AnnData,
+    *,
+    flowsig_network_key: str = "flowsig_network",
+    adjacency_key: str = "adjacency",
+    validated_key: str = "validated",
+) -> None:
+    """
+    Enforce inflow → module_tf →  module_cre  → (outflow )x ordering on a CPDAG.
+    Undirected module_tf–module_tf edges are kept bidirectionally.
+    """
+    flowsig_network = adata.uns[flowsig_network_key]["network"]
+    flow_var_info: pd.DataFrame = adata.uns[flowsig_network_key]["flow_var_info"]
+    flow_var_types = flow_var_info["Type"].to_numpy()
+    adjacency = flowsig_network[adjacency_key]
+    cpdag = gpm.PDAG.from_amat(adjacency)
+
+    def biological(i: int, j: int) -> bool:
+        type_i, type_j = flow_var_types[i], flow_var_types[j]
+        return (
+            (type_i == "inflow" and type_j == "module_tf")
+            or (type_i == "module_tf" and type_j == "module_cre")
+            or (type_i == "module_cre" and type_j == "outflow")
+        )
+
+    validated = _filter_edges_by_weight(cpdag, adjacency, biological, 0.0)
+    flowsig_network[f"{adjacency_key}_{validated_key}"] = validated
+ 
 def construct_intercellular_flow_network(
     adata: AnnData,
     *,
@@ -107,28 +136,56 @@ def construct_intercellular_flow_network(
         flowsig_network.add_edge(names[i], names[j], weight=w)
         flowsig_network.nodes[names[i]]["type"] = types[i]
         flowsig_network.nodes[names[j]]["type"] = types[j]
-    
-    # Add directed edges
-    for i, j in cpdag.arcs:
-        if types[i] == "inflow" and types[j] == "module":
-            add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
-        elif types[i] == "module" and types[j] in {"outflow", "module"}:
-            add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
 
-    # Add undirected edges
-    for i, j in cpdag.edges:
-        pair = (min(i, j), max(i, j))
-        edge_weight = min(totals[pair], 1.0)
-        if types[i] == "inflow" and types[j] == "module":
-            add_edge(i, j, edge_weight)
-        elif types[i] == "module" and types[j] == "inflow":
-            add_edge(j, i, edge_weight)
-        elif types[i] == "module" and types[j] == "outflow":
-            add_edge(i, j, edge_weight)
-        elif types[i] == "outflow" and types[j] == "module":
-            add_edge(j, i, edge_weight)
-        elif types[i] == types[j] == "module":
-            add_edge(i, j, edge_weight)
-            add_edge(j, i, edge_weight)
+    if 'module_cre' in types:
+        # Add directed edges
+        for i, j in cpdag.arcs:
+            if types[i] == "inflow" and types[j] == "module_tf":
+                add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
+            elif types[i] == "module_tf" and types[j] == "module_cre":
+                add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
+            elif types[i] == "module_cre" and types[j] == "outflow":
+                add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
+
+        # Orient undirected edges by the same biological rules, but without normalizing by totals since these are not bootstrap‑stable edges
+        for i, j in cpdag.edges:
+            pair = (min(i, j), max(i, j))
+            edge_weight = min(totals[pair], 1.0)
+            if types[i] == "inflow" and types[j] == "module_tf":
+                add_edge(i, j, edge_weight)
+            elif types[i] == "module_tf" and types[j] == "inflow":
+                add_edge(j, i, edge_weight)
+            elif types[i] == "module_tf" and types[j] == "module_cre":
+                add_edge(i, j, edge_weight)
+            elif types[i] == "module_cre" and types[j] == "module_tf":
+                add_edge(j, i, edge_weight)
+            elif types[i] == "module_cre" and types[j] == "outflow":
+                add_edge(i, j, edge_weight)
+            elif types[i] == "outflow" and types[j] == "module_cre":
+                add_edge(j, i, edge_weight)
+
+    else:
+        # Add directed edges
+        for i, j in cpdag.arcs:
+            if types[i] == "inflow" and types[j] == "module":
+                add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
+            elif types[i] == "module" and types[j] in {"outflow", "module"}:
+                add_edge(i, j, adjacency[i, j] / totals[(min(i, j), max(i, j))])
+
+        # Add undirected edges
+        for i, j in cpdag.edges:
+            pair = (min(i, j), max(i, j))
+            edge_weight = min(totals[pair], 1.0)
+            if types[i] == "inflow" and types[j] == "module":
+                add_edge(i, j, edge_weight)
+            elif types[i] == "module" and types[j] == "inflow":
+                add_edge(j, i, edge_weight)
+            elif types[i] == "module" and types[j] == "outflow":
+                add_edge(i, j, edge_weight)
+            elif types[i] == "outflow" and types[j] == "module":
+                add_edge(j, i, edge_weight)
+            elif types[i] == types[j] == "module":
+                add_edge(i, j, edge_weight)
+                add_edge(j, i, edge_weight)
 
     return flowsig_network

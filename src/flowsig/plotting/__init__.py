@@ -1,6 +1,7 @@
-from ._plotting import plot_differentially_flowing_signals, plot_intercellular_flows
+from ._plotting import plot_differentially_flowing_signals, plot_intercellular_flows, plot_intercellular_cre_flows
 
 __all__ = [
     "plot_differentially_flowing_signals",
-    "plot_intercellular_flows"
+    "plot_intercellular_flows",
+    "plot_intercellular_cre_flows"
 ]

@@ -223,11 +223,13 @@ def plot_intercellular_flows(adata: sc.AnnData,
             inflow_vars = list(set([edge[0] for edge in flow_network.edges() if edge[0] in all_inflow_vars and edge[1] in module_vars]))
 
     # We will sort the inflow vars etc now
-    inflow_vars = sorted(inflow_vars)
-    module_vars = sorted(module_vars, key=lambda x: int(x.split('-')[1])) # Assumption is that all module vars are written like 'GEM-1', etc.
-    # module_vars = sorted(module_vars) # Assumption is that all module vars are written like 'GEM-1', etc.
+    compressed_inflows_used = all('-' in var for var in inflow_vars) # Assumption is that all inflow vars are written like 'Inflow-1', etc.
+    compressed_modules_used = all('-' in var for var in module_vars) # Assumption is that all module vars are written like 'GEM-1', etc.
+    compressed_outflows_used = all('-' in var for var in outflow_vars) # Assumption is that all outflow vars are written like 'Outflow-1', etc.
+    inflow_vars = sorted(inflow_vars) if not compressed_inflows_used else sorted(inflow_vars, key=lambda x: int(x.split('-')[1])) # Assumption is that compressed inflow vars are written like 'Inflow-1', etc.
+    module_vars = sorted(module_vars) if not compressed_modules_used else sorted(module_vars, key=lambda x: int(x.split('-')[1])) # Assumption is that all module vars are written like 'GEM-1', etc.
+    outflow_vars = sorted(outflow_vars) if not compressed_outflows_used else sorted(outflow_vars, key=lambda x: int(x.split('-')[1])) # Assumption is that compressed outflow vars are written like 'Outflow-1', etc.
 
-    outflow_vars = sorted(outflow_vars)
     resultant_pattern_graph = flow_network.subgraph(inflow_vars + module_vars + outflow_vars)
 
     node_colours = {}
